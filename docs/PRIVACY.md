@@ -35,7 +35,9 @@ require the user to choose which complete version replaces the other.
 
 The first cloud backup transfers the complete application document. Later backups send only changed
 entities and dated weight upserts or deletions. Supabase merges the patch transactionally; transport
-payloads therefore do not repeatedly include unchanged health history.
+payloads therefore do not repeatedly include unchanged health history. Local changes are immediate;
+automatic cloud transport waits for a one-minute quiet period and coalesces edits made during that
+period.
 
 ## QR LAN transfer
 

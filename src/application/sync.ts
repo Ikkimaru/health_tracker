@@ -5,6 +5,7 @@ export const SYNC_COOLDOWN_MS = 60_000;
 export interface SyncMetadata {
   snapshotId?: string;
   localHash?: string;
+  lastLocalChangeAt?: string;
   lastBackupAt?: string;
   lastQueryAt?: string;
   lastRestoreAt?: string;

@@ -32,7 +32,9 @@ to work.
    passes them to the production build. Restart the local server or redeploy the app.
 
 In Settings, create an account or sign in, then choose **Back up now**. The current and immediately
-previous successful snapshots are retained, and later edits are backed up automatically while the tab remains open. Supabase persists
+previous successful snapshots are retained, and later edits are backed up automatically after one
+minute without another local change while the tab remains open. Further edits reset that timer, so
+local work is immediate and related cloud changes are coalesced. Supabase persists
 the authentication session locally. Cloud records are protected by authentication and Row Level
 Security but are not encrypted with a separate application password.
 After the initial snapshot, backups transmit only changed entities or individual weight dates.

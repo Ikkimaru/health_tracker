@@ -4,7 +4,6 @@ import {
   fingerprint,
   formatCooldownRemaining,
   formatSyncDate,
-  parseConflictChoice,
   SYNC_COOLDOWN_MS,
   type SyncDecision,
   type SyncMetadata
@@ -139,7 +138,7 @@ export class HealthQuestApp {
     if (!this.cloud.signedIn) return;
     const metadata = this.syncMetadata();
     const now = Date.now();
-    if (this.refreshSyncIsCoolingDown(metadata, now)) return;
+    if (this.syncIsCoolingDown(metadata, now)) return;
     const queriedAt = new Date(now).toISOString();
     this.saveSyncMetadata({ ...metadata, lastQueryAt: queriedAt });
     try {
@@ -154,13 +153,25 @@ export class HealthQuestApp {
     }
   }
 
-  private refreshSyncIsCoolingDown(metadata: SyncMetadata, now: number): boolean {
-    if (!metadata.lastQueryAt) return false;
-    const elapsed = now - new Date(metadata.lastQueryAt).getTime();
-    if (elapsed >= SYNC_COOLDOWN_MS) return false;
-    const remaining = formatCooldownRemaining(SYNC_COOLDOWN_MS - elapsed);
-    this.message = `Please wait ${remaining} before the next refresh backup or restore can occur.`;
+  private syncIsCoolingDown(metadata: SyncMetadata, now = Date.now()): boolean {
+    const remaining = this.syncCooldownRemaining(metadata, now);
+    if (!remaining) return false;
+    this.message = `Please wait ${formatCooldownRemaining(remaining)} before the next refresh backup or restore can occur.`;
     return true;
+  }
+
+  private syncCooldownRemaining(metadata: SyncMetadata, now = Date.now()): number {
+    const lastActivity = [
+      metadata.lastLocalChangeAt,
+      metadata.lastQueryAt,
+      metadata.lastRestoreAt,
+      metadata.lastBackupAt
+    ]
+      .filter((value): value is string => Boolean(value))
+      .reduce((latest, value) => Math.max(latest, new Date(value).getTime()), 0);
+    if (!lastActivity) return 0;
+    const elapsed = now - lastActivity;
+    return Math.max(0, SYNC_COOLDOWN_MS - elapsed);
   }
 
   private async uploadInitialRefreshSnapshot(): Promise<void> {
@@ -184,7 +195,11 @@ export class HealthQuestApp {
       this.rememberMatchingCloudSnapshot(cloudData, latest.summary.id, localHash);
       return;
     }
-    const useCloud = this.resolveCloudConflict(decision);
+    const useCloud = await this.resolveCloudConflict(
+      decision,
+      metadata.lastLocalChangeAt ?? this.recoveryPoints[0]?.createdAt,
+      latest.summary.createdAt
+    );
     if (useCloud === undefined) return;
     if (useCloud) {
       await this.restoreRefreshSnapshot(cloudData, cloudHash, latest.summary.id);
@@ -202,16 +217,50 @@ export class HealthQuestApp {
     this.saveSyncMetadata({ ...this.syncMetadata(), snapshotId, localHash });
   }
 
-  private resolveCloudConflict(decision: SyncDecision): boolean | undefined {
+  private async resolveCloudConflict(
+    decision: SyncDecision,
+    localChangedAt: string | undefined,
+    cloudChangedAt: string
+  ): Promise<boolean | undefined> {
     if (decision !== "conflict") return decision === "restore";
-    const answer = parseConflictChoice(
-      prompt(
-        "Local and Supabase data both changed. Type LOCAL to keep and upload this device's data, type SUPABASE to restore cloud data, or select Cancel to do nothing."
-      )
-    );
-    if (answer === "local" || answer === "supabase") return answer === "supabase";
+    const answer = await this.chooseConflictVersion(localChangedAt, cloudChangedAt);
+    if (answer) return answer === "supabase";
     this.message = "Conflict resolution cancelled. No data was changed.";
     return undefined;
+  }
+
+  private chooseConflictVersion(
+    localChangedAt: string | undefined,
+    cloudChangedAt: string
+  ): Promise<"local" | "supabase" | undefined> {
+    return new Promise((resolve) => {
+      const dialog = document.createElement("dialog");
+      dialog.className = "sync-conflict";
+      dialog.setAttribute("aria-labelledby", "sync-conflict-title");
+      dialog.innerHTML = `<div class="form-grid"><div class="wide"><p class="eyebrow">SYNC CONFLICT</p><h3 id="sync-conflict-title">Choose which version should replace the other</h3><p>This device and Supabase both changed since their last shared backup.</p><dl class="sync-status conflict-times"><div><dt>Local version</dt><dd>${escapeHtml(localChangedAt ? formatSyncDate(localChangedAt) : "Time unavailable")}</dd></div><div><dt>Supabase version</dt><dd>${escapeHtml(formatSyncDate(cloudChangedAt))}</dd></div></dl></div><div class="actions wide"><button type="button" class="primary" data-sync-choice="local">Override Supabase with local</button><button type="button" class="button" data-sync-choice="supabase">Override local with Supabase</button><button type="button" class="quiet" data-sync-choice="cancel">Cancel</button></div></div>`;
+      document.body.append(dialog);
+      document.documentElement.classList.add("modal-open");
+      let settled = false;
+      const finish = (choice?: "local" | "supabase") => {
+        if (settled) return;
+        settled = true;
+        dialog.close();
+        dialog.remove();
+        document.documentElement.classList.remove("modal-open");
+        resolve(choice);
+      };
+      dialog.querySelectorAll<HTMLButtonElement>("[data-sync-choice]").forEach((button) =>
+        button.addEventListener("click", () => {
+          const choice = button.dataset.syncChoice;
+          finish(choice === "local" || choice === "supabase" ? choice : undefined);
+        })
+      );
+      dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        finish();
+      });
+      dialog.showModal();
+    });
   }
 
   private async restoreRefreshSnapshot(
@@ -754,9 +803,16 @@ export class HealthQuestApp {
   private async persist(): Promise<void> {
     await this.repository.save(this.data);
     this.recoveryPoints = await this.repository.listRecoveryPoints();
+    this.saveSyncMetadata({
+      ...this.syncMetadata(),
+      lastLocalChangeAt: new Date().toISOString()
+    });
     if (!this.cloud.signedIn) return;
     window.clearTimeout(this.cloudBackupTimer);
-    this.cloudBackupTimer = window.setTimeout(() => void this.automaticSupabaseBackup(), 1_500);
+    this.cloudBackupTimer = window.setTimeout(
+      () => void this.automaticSupabaseBackup(),
+      SYNC_COOLDOWN_MS
+    );
   }
 
   private async restoreRecoveryPoint(pointId: string): Promise<void> {
@@ -784,6 +840,10 @@ export class HealthQuestApp {
       this.render();
       return;
     }
+    if (this.syncIsCoolingDown(this.syncMetadata())) {
+      this.render();
+      return;
+    }
     if (
       !confirm(
         "This recovery point is older than the current local version. Uploading it will make the older version the current Supabase backup. Continue?"
@@ -808,6 +868,15 @@ export class HealthQuestApp {
   }
 
   private async automaticSupabaseBackup(): Promise<void> {
+    const remaining = this.syncCooldownRemaining(this.syncMetadata());
+    if (remaining) {
+      window.clearTimeout(this.cloudBackupTimer);
+      this.cloudBackupTimer = window.setTimeout(
+        () => void this.automaticSupabaseBackup(),
+        remaining
+      );
+      return;
+    }
     try {
       const summary = await this.uploadCloudData(this.data);
       if (summary) await this.recordBackup(summary, this.cloudBaseline!);
@@ -896,6 +965,10 @@ export class HealthQuestApp {
 
   private async backupToSupabase(): Promise<void> {
     try {
+      if (this.syncIsCoolingDown(this.syncMetadata())) {
+        this.render();
+        return;
+      }
       const summary = await this.uploadCloudData(this.data);
       if (summary) await this.recordBackup(summary, this.cloudBaseline!);
       this.message = summary
@@ -910,11 +983,7 @@ export class HealthQuestApp {
   private async restoreFromSupabase(): Promise<void> {
     try {
       const sync = this.syncMetadata();
-      if (
-        sync.lastRestoreAt &&
-        Date.now() - new Date(sync.lastRestoreAt).getTime() < SYNC_COOLDOWN_MS
-      ) {
-        this.message = "Restore is available one minute after the previous restore.";
+      if (this.syncIsCoolingDown(sync)) {
         this.render();
         return;
       }

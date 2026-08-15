@@ -28,7 +28,9 @@ document, and expands the result into feature-specific Postgres tables. Snapshot
 rows into restorable versions and preserves the current and immediately previous successful cloud snapshots. IndexedDB
 remains authoritative and offline-capable, with five rotating pre-save recovery points stored in a
 separate local object store.
-Supabase Auth persists its browser session, and signed-in changes can schedule further snapshots.
+Supabase Auth persists its browser session. Signed-in changes save to IndexedDB immediately and
+reset a one-minute quiet-period timer before a cloud snapshot is attempted, coalescing rapid local
+edits rather than interacting with Supabase for each change.
 Restore remains an explicit full replacement rather than unsafe last-write-wins synchronization.
 
 On browser refresh, a signed-in client checks Supabase at most once per minute. A local fingerprint

@@ -143,38 +143,29 @@ export class SupabaseBackups {
     }));
   }
 
-  async upload(data: AppData, retain = 2): Promise<SupabaseBackupSummary> {
+  async upload(data: AppData): Promise<SupabaseBackupSummary> {
     this.requireUser();
-    const client = this.requireClient();
-    const { error } = await client.rpc("store_app_snapshot", { document: data });
+    const { data: snapshotId, error } = await this.requireClient().rpc("store_app_snapshot", {
+      document: data
+    });
     if (error) throw error;
-    return this.finishUpload(retain);
+    return this.uploadSummary(snapshotId);
   }
 
-  async uploadChanges(
-    before: AppData,
-    after: AppData,
-    retain = 2
-  ): Promise<SupabaseBackupSummary | undefined> {
+  async uploadChanges(before: AppData, after: AppData): Promise<SupabaseBackupSummary | undefined> {
     this.requireUser();
     const patch = createAppPatch(before, after);
     if (!patchHasChanges(patch)) return undefined;
-    const { error } = await this.requireClient().rpc("store_app_patch", { changes: patch });
+    const { data: snapshotId, error } = await this.requireClient().rpc("store_app_patch", {
+      changes: patch
+    });
     if (error) throw error;
-    return this.finishUpload(retain);
+    return this.uploadSummary(snapshotId);
   }
 
-  private async finishUpload(retain: number): Promise<SupabaseBackupSummary> {
-    const backups = await this.list();
-    const expired = backups.slice(retain).map(({ id }) => id);
-    if (expired.length) {
-      const { error: deleteError } = await this.requireClient()
-        .from(SNAPSHOTS_TABLE)
-        .delete()
-        .in("id", expired);
-      if (deleteError) throw deleteError;
-    }
-    return backups[0]!;
+  private uploadSummary(snapshotId: unknown): SupabaseBackupSummary {
+    if (typeof snapshotId !== "string") throw new Error("Supabase did not return a snapshot ID.");
+    return { id: snapshotId, createdAt: new Date().toISOString() };
   }
 
   async downloadLatest(): Promise<{ summary: SupabaseBackupSummary; data: unknown }> {

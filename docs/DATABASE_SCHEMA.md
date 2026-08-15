@@ -58,7 +58,10 @@ auth.users
 ```
 
 Every feature relationship includes `snapshot_id`. Records can only reference definitions from the
-same snapshot, preventing cross-version links. `position` preserves application array order.
+same snapshot, preventing cross-version links. `position` preserves application array order. The
+cross-feature exercise and routine references use deferred `NO ACTION` checks: deleting an entity
+from a retained snapshot remains prohibited, while deleting an entire expired snapshot can finish
+all of its cascades before PostgreSQL validates that no references remain.
 
 ### Derived achievements and progress
 

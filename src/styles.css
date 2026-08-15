@@ -218,7 +218,8 @@
   font-size: 0.65rem;
 }
 
-.weight-editor {
+.weight-editor,
+.sync-conflict {
   width: min(92vw, 420px);
   padding: 1.25rem;
   border: 1px solid var(--line);
@@ -228,7 +229,8 @@
   box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 55%);
 }
 
-.weight-editor::backdrop {
+.weight-editor::backdrop,
+.sync-conflict::backdrop {
   background: rgb(0 0 0 / 72%);
   backdrop-filter: blur(2px);
 }
@@ -237,6 +239,10 @@
   color: var(--notice-text);
   border-color: var(--notice-text);
   background: var(--notice-bg);
+}
+
+.conflict-times {
+  margin-top: 1rem;
 }
 
 html.modal-open,
