@@ -11,6 +11,7 @@ import {
 import { calculateProgress, createSession, exerciseComplete, todayKey } from "../domain/rules";
 import type { AppData, Exercise, MeasurementKind, Routine, ThemeColors } from "../domain/types";
 import { createBackup, openBackup } from "../infrastructure/backup";
+import { SupabaseBackups } from "../infrastructure/supabaseBackups";
 import { labels, renderView, type View } from "./views";
 const escapeHtml = (value: unknown) => {
   let text = "";
@@ -36,12 +37,18 @@ const textValue = (values: FormData, key: string): string => {
 const textValues = (values: FormData, key: string): string[] =>
   values.getAll(key).filter((value): value is string => typeof value === "string");
 
-// cspell:ignore topbar healthtracker
+// cspell:ignore healthtracker supabase topbar
 
 export class HealthQuestApp {
   private data!: AppData;
   private view: View = "today";
   private message = "";
+  private readonly cloud = new SupabaseBackups(
+    import.meta.env.VITE_SUPABASE_URL ?? "",
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? ""
+  );
+  private cloudPassword = "";
+  private cloudBackupTimer?: number;
 
   constructor(
     private readonly root: HTMLElement,
@@ -49,6 +56,11 @@ export class HealthQuestApp {
   ) {}
 
   async start(): Promise<void> {
+    try {
+      await this.cloud.initialize();
+    } catch {
+      this.message = "The saved Supabase session could not be restored.";
+    }
     this.data = await this.repository.load();
     this.data.settings.customTheme ??= defaultCustomTheme();
     this.applyTheme();
@@ -62,7 +74,7 @@ export class HealthQuestApp {
       const session = createSession(date, this.data.routines, this.data.exercises);
       if (session) {
         this.data.sessions.push(session);
-        await this.repository.save(this.data);
+        await this.persist();
       }
     }
   }
@@ -100,7 +112,30 @@ export class HealthQuestApp {
 
   private render(): void {
     this.root.innerHTML = this.layout(renderView(this.view, this.data));
+    this.addSupabasePanel();
     this.bindEvents();
+  }
+
+  private addSupabasePanel(): void {
+    if (this.view !== "settings") return;
+    const transfer = [...this.root.querySelectorAll<HTMLElement>(".panel")].find((panel) =>
+      panel.querySelector("h3")?.textContent?.includes("Local transfer")
+    );
+    const accountStatus = this.cloud.signedIn
+      ? `Signed in as ${escapeHtml(this.cloud.email)}.`
+      : "Create an account or sign in to keep encrypted backups.";
+    const signedInControls =
+      '<div class="actions"><button id="supabase-backup" class="primary">Back up now</button><button id="supabase-restore" class="button">Restore latest</button><button id="supabase-signout" class="quiet">Sign out</button></div>';
+    const authenticationForm =
+      '<form id="supabase-auth" class="form-grid"><label class="wide">Email<input name="email" type="email" autocomplete="email" required/></label><label class="wide">Account password<input name="accountPassword" type="password" autocomplete="current-password" minlength="8" required/></label><div class="actions wide"><button name="action" value="signin" class="primary">Sign in</button><button name="action" value="signup" class="button">Create account</button></div></form>';
+    const controls = this.cloud.signedIn ? signedInControls : authenticationForm;
+    const configurationNote = this.cloud.configured
+      ? ""
+      : "<small>Supabase requires deployment URL and publishable-key configuration. See the README.</small>";
+    transfer?.insertAdjacentHTML(
+      "beforebegin",
+      `<div class="panel"><h3>Encrypted Supabase backup</h3><p>${accountStatus} The newest five snapshots are retained.</p>${controls}${configurationNote}</div>`
+    );
   }
 
   private bindEvents(): void {
@@ -121,7 +156,7 @@ export class HealthQuestApp {
         if (prescription && exercise) {
           prescription.completed = input.checked;
           exercise.completedAt = exerciseComplete(exercise) ? new Date().toISOString() : undefined;
-          await this.repository.save(this.data);
+          await this.persist();
           this.render();
         }
       })
@@ -161,6 +196,18 @@ export class HealthQuestApp {
     this.root
       .querySelector<HTMLInputElement>("#import")
       ?.addEventListener("change", (event) => void this.importBackup(event));
+    this.root
+      .querySelector<HTMLFormElement>("#supabase-auth")
+      ?.addEventListener("submit", (event) => void this.authenticateSupabase(event));
+    this.root
+      .querySelector<HTMLButtonElement>("#supabase-backup")
+      ?.addEventListener("click", () => void this.backupToSupabase());
+    this.root
+      .querySelector<HTMLButtonElement>("#supabase-restore")
+      ?.addEventListener("click", () => void this.restoreFromSupabase());
+    this.root
+      .querySelector<HTMLButtonElement>("#supabase-signout")
+      ?.addEventListener("click", () => void this.signOutSupabase());
   }
 
   private async addExercise(event: SubmitEvent): Promise<void> {
@@ -178,7 +225,7 @@ export class HealthQuestApp {
       createdAt: new Date().toISOString()
     };
     this.data.exercises.push(exercise);
-    await this.repository.save(this.data);
+    await this.persist();
     this.message = `${exercise.name} added.`;
     this.render();
   }
@@ -210,7 +257,7 @@ export class HealthQuestApp {
       return;
     }
     this.data.routines.push(routine);
-    await this.repository.save(this.data);
+    await this.persist();
     await this.ensureToday();
     this.message = `${routine.name} scheduled.`;
     this.render();
@@ -220,7 +267,7 @@ export class HealthQuestApp {
     event.preventDefault();
     const values = new FormData(event.currentTarget as HTMLFormElement);
     this.data.settings.displayName = textValue(values, "displayName") || "Adventurer";
-    await this.repository.save(this.data);
+    await this.persist();
     this.message = "Profile saved.";
     this.render();
   }
@@ -288,7 +335,7 @@ export class HealthQuestApp {
     }
     this.data.settings.theme = textValue(values, "theme") as AppData["settings"]["theme"];
     this.data.settings.customTheme = customTheme;
-    await this.repository.save(this.data);
+    await this.persist();
     this.applyTheme();
     this.message = "Theme saved.";
     this.render();
@@ -303,10 +350,28 @@ export class HealthQuestApp {
     }
     if (target) {
       target.archived = true;
-      await this.repository.save(this.data);
+      await this.persist();
       this.message = "Archived. Existing history was preserved.";
       this.render();
     }
+  }
+
+  private async persist(): Promise<void> {
+    await this.repository.save(this.data);
+    if (!this.cloud.signedIn || !this.cloudPassword) return;
+    window.clearTimeout(this.cloudBackupTimer);
+    this.cloudBackupTimer = window.setTimeout(() => void this.automaticSupabaseBackup(), 1_500);
+  }
+
+  private async automaticSupabaseBackup(): Promise<void> {
+    try {
+      await this.cloud.upload(await createBackup(this.data, this.cloudPassword));
+      this.message = "Changes saved locally and backed up to Supabase.";
+    } catch (error) {
+      this.message =
+        error instanceof Error ? error.message : "The automatic Supabase backup failed.";
+    }
+    this.render();
   }
 
   private password(): string {
@@ -346,5 +411,75 @@ export class HealthQuestApp {
       this.message = error instanceof Error ? error.message : "Import failed.";
       this.render();
     }
+  }
+
+  private async authenticateSupabase(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    try {
+      const values = new FormData(event.currentTarget as HTMLFormElement);
+      const email = textValue(values, "email");
+      const password = textValue(values, "accountPassword");
+      const action = (event.submitter as HTMLButtonElement | null)?.value;
+      if (action === "signup") {
+        const signedIn = await this.cloud.signUp(email, password);
+        this.message = signedIn
+          ? "Supabase account created and signed in."
+          : "Account created. Confirm the email, then sign in.";
+      } else {
+        await this.cloud.signIn(email, password);
+        this.message = "Signed in to Supabase.";
+      }
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : "Supabase authentication failed.";
+    }
+    this.render();
+  }
+
+  private async signOutSupabase(): Promise<void> {
+    try {
+      await this.cloud.signOut();
+      this.cloudPassword = "";
+      this.message = "Signed out of Supabase.";
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : "Supabase sign-out failed.";
+    }
+    this.render();
+  }
+
+  private async backupToSupabase(): Promise<void> {
+    try {
+      const backupPassword = this.password();
+      await this.cloud.upload(await createBackup(this.data, backupPassword));
+      this.cloudPassword = backupPassword;
+      this.message =
+        "Encrypted backup saved to Supabase. Later changes will back up automatically while this app remains open.";
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : "Supabase backup failed.";
+    }
+    this.render();
+  }
+
+  private async restoreFromSupabase(): Promise<void> {
+    try {
+      const password = this.password();
+      const { summary, raw } = await this.cloud.downloadLatest();
+      const restored = await openBackup(raw, password);
+      const counts = `${restored.exercises.length} exercises, ${restored.routines.length} routines, ${restored.sessions.length} sessions`;
+      const date = new Date(summary.createdAt).toLocaleString();
+      if (
+        !confirm(
+          `Replace this device's data with the Supabase backup from ${date} (${counts})? This cannot be undone.`
+        )
+      )
+        return;
+      await this.repository.replace(restored);
+      this.data = restored;
+      this.cloudPassword = password;
+      this.applyTheme();
+      this.message = `Supabase backup restored: ${counts}.`;
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : "Supabase restore failed.";
+    }
+    this.render();
   }
 }

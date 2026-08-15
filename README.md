@@ -1,5 +1,7 @@
 # Health Quest
 
+<!-- cspell:ignore healthtracker supabase -->
+
 Health Quest is a private, offline-first exercise tracker. It installs as a Progressive Web App on Android, works in desktop browsers, and stores personal data only in that browser profile.
 
 ## Start locally
@@ -12,6 +14,27 @@ npm run dev
 ```
 
 Open the displayed address. On Android, deploy to HTTPS (such as GitHub Pages), open it in Chrome, and choose **Install app** from the browser menu. After the first successful load, the app works offline.
+
+## Enable encrypted Supabase backup
+
+Supabase backup is optional. Without configuration, every local and file-backup feature continues
+to work.
+
+1. In Supabase, keep the repository working directory set to `.`. The GitHub integration applies
+   migrations from `supabase/migrations` after they reach the configured production branch.
+2. In Authentication settings, enable email/password authentication, set the production Site URL,
+   and add `http://localhost:5173` as a redirect URL for local development. Choose whether account
+   creation requires email confirmation.
+3. Copy `.env.example` to `.env.local`. Set `VITE_SUPABASE_URL` and
+   `VITE_SUPABASE_PUBLISHABLE_KEY` from the project's Connect dialog. These values are intended for
+   browsers; never expose a secret or service-role key.
+4. Add those two values as GitHub repository variables with the same names. The Pages workflow
+   passes them to the production build. Restart the local server or redeploy the app.
+
+In Settings, create an account or sign in, enter a separate backup-encryption password, and choose
+**Back up now**. The app keeps the newest five encrypted snapshots. Later edits are backed up
+automatically while the tab remains open and remembers the encryption password. Supabase persists
+the authentication session locally; the encryption password remains in memory only.
 
 ## Verify the application
 

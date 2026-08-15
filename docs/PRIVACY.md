@@ -8,6 +8,23 @@ Backups use AES-256-GCM. Their keys are derived from the user-entered password w
 
 The password is never saved and cannot be recovered. Import authenticates, decrypts, parses, and validates a backup before offering replacement. Keep separate backups before replacing important data.
 
+## Optional Supabase backup
+
+When configured and explicitly used, the app stores encrypted backup envelopes in Supabase.
+Supabase receives ciphertext plus account email, identifiers, timestamps, sizes, authentication,
+and network metadata. Row Level Security restricts each signed-in user to their own records. The
+public browser key is not a secret and grants no bypass of those policies; a service-role key must
+never be included in the app. Supabase Auth persists its session in browser storage, but the backup
+encryption password is held only in memory and cannot be recovered.
+
+Database constraints reject encrypted envelopes larger than 5 MB, and a database trigger retains
+only the newest five snapshots per account. These limits are enforced even when a caller bypasses
+the application interface and sends requests directly to the Data API.
+
+Cloud restore validates and decrypts the newest snapshot before asking to replace local data. The
+feature is backup and recovery, not conflict-aware synchronization between simultaneously edited
+devices.
+
 ## QR LAN transfer
 
 The QR contains an HTTP address on the computer's LAN, the selected direction, and a random 192-bit token. It does not contain health data or a password. The temporary server:

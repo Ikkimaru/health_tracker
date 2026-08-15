@@ -21,21 +21,28 @@ Routines reference exercise definitions. The first time a scheduled date is open
 
 IndexedDB holds one versioned application document. Imports decrypt and validate a full replacement before asking for confirmation and writing it, preventing partially restored state.
 
+The optional Supabase adapter uploads the same encrypted replacement envelope into a Postgres row
+owned by the authenticated user. IndexedDB remains authoritative and offline-capable. Supabase Auth
+persists its browser session, while backup passwords exist only in memory. After a successful manual
+cloud backup, changes schedule further encrypted snapshots for the remainder of that open session.
+Restore remains an explicit full replacement rather than unsafe last-write-wins synchronization.
+
 ## PWA lifecycle
 
 Vite creates fingerprinted static assets. A small service worker fetches navigations from the network first so newly deployed HTML cannot reference assets removed by a later deployment, while retaining the last successful shell as its offline fallback. Other successful GET responses are cached for offline use. GitHub Pages hosts only those assets; browser databases and backups are not deployed.
 
 ## Dependencies
 
-| Package          | Purpose                                                                  | Removal path                                        |
-| ---------------- | ------------------------------------------------------------------------ | --------------------------------------------------- |
-| `qrcode`         | Correct QR encoding for LAN pairing                                      | Replace the terminal QR with a manually entered URL |
-| `vite`           | Development server and static build                                      | Use `tsc` plus a custom static build script         |
-| `typescript`     | Static checking                                                          | Convert sources to browser JavaScript               |
-| `vitest`         | Readable unit and adapter tests                                          | Use Node's test runner after compiling tests        |
-| `playwright`     | Critical real-browser journey                                            | Maintain a documented manual acceptance script      |
-| `fake-indexeddb` | IndexedDB adapter tests in Node                                          | Test only through Playwright                        |
-| `tsx`            | Run the TypeScript LAN tool                                              | Compile the tool before execution                   |
-| `prettier`       | Consistent formatting across code, CSS, configuration, and documentation | Apply equivalent editor formatting rules manually   |
+| Package                 | Purpose                                                                  | Removal path                                        |
+| ----------------------- | ------------------------------------------------------------------------ | --------------------------------------------------- |
+| `qrcode`                | Correct QR encoding for LAN pairing                                      | Replace the terminal QR with a manually entered URL |
+| `@supabase/supabase-js` | Account authentication and encrypted snapshot persistence                | Retain local and file backups only                  |
+| `vite`                  | Development server and static build                                      | Use `tsc` plus a custom static build script         |
+| `typescript`            | Static checking                                                          | Convert sources to browser JavaScript               |
+| `vitest`                | Readable unit and adapter tests                                          | Use Node's test runner after compiling tests        |
+| `playwright`            | Critical real-browser journey                                            | Maintain a documented manual acceptance script      |
+| `fake-indexeddb`        | IndexedDB adapter tests in Node                                          | Test only through Playwright                        |
+| `tsx`                   | Run the TypeScript LAN tool                                              | Compile the tool before execution                   |
+| `prettier`              | Consistent formatting across code, CSS, configuration, and documentation | Apply equivalent editor formatting rules manually   |
 
 Versions are pinned in `package.json` and the lockfile.
