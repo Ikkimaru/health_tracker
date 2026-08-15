@@ -23,3 +23,11 @@
 - Achievements cover first exercise, first day, 3/7/30-day streaks, and 10/50/100 completed exercises.
 
 These are replaceable policies. Change the policy and its focused specifications together; do not preserve a rule merely because existing code implements it.
+
+## Themes
+
+- System mode follows the browser's current light or dark preference.
+- Light and dark modes use documented built-in palettes.
+- Custom mode stores a complete palette locally, including page, surface, text, secondary text, accent, button text, border, banner, success, and notice colors.
+- Theme edits affect an isolated live preview until explicitly saved.
+- Custom palettes are part of local settings and encrypted backups; they are never published with the application.

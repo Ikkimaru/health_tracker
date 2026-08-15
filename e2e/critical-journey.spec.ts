@@ -24,3 +24,17 @@ test("creates an exercise and routine and keeps them after reload", async ({ pag
   await page.getByText("Set 3: 10 reps").click();
   await expect(page.getByText("Quest complete!")).toBeVisible();
 });
+
+test("previews a custom palette and applies it only after saving", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const background = page.getByLabel("Page background color");
+  await background.fill("#332244");
+  await expect(page.getByRole("radio", { name: /Custom/ })).toBeChecked();
+  await expect(page.locator("#theme-preview")).toHaveCSS("background-color", "rgb(51, 34, 68)");
+  await expect(page.locator("html")).not.toHaveCSS("background-color", "rgb(51, 34, 68)");
+  await page.getByRole("button", { name: "Save theme" }).click();
+  await expect(page.locator(".notice")).toContainText("Theme saved");
+  await page.reload();
+  await expect(page.locator("html")).toHaveCSS("background-color", "rgb(51, 34, 68)");
+});

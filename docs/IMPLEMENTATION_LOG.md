@@ -28,3 +28,16 @@ Physical Android installation, offline relaunch, firewall behavior, and cross-de
 - Added pinned Prettier tooling and repository configuration to keep TypeScript, CSS, HTML, JSON, YAML, and Markdown readable and consistent.
 - Added format and format-check commands, with formatting verification in the Pages workflow.
 - Added a private agent rule requiring formatting after changes and before handoff.
+
+## 2026-08-15 — Custom theme editor
+
+- Replaced the browser-dependent theme dropdown with explicit System, Light, Dark, and Custom choices.
+- Added controls for every application color token and an isolated live preview containing representative text, surfaces, controls, progress, success, and notice states.
+- Kept unsaved edits inside the preview and persisted the selected palette only when the user saves it.
+- Added deterministic theme resolution tests and compatibility defaults for existing local databases and backups.
+
+## 2026-08-15 — UI view separation
+
+- Added a dedicated view-rendering module for Today, Exercises, Routines, History, Achievements, and Settings.
+- Changed the application coordinator to select views through a single renderer boundary, keeping screen markup separate from stateful event and persistence logic.
+- Re-ran formatting, unit tests, production build, and both browser journeys successfully.

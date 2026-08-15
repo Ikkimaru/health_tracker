@@ -9,7 +9,8 @@ Health Quest is local-first. The browser application is useful without a network
 - `src/domain` contains portable records and deterministic scheduling, completion, XP, streak, and achievement policies.
 - `src/application` defines persistence contracts and application defaults.
 - `src/infrastructure` implements IndexedDB and encrypted backup adapters.
-- `src/ui` renders semantic DOM and coordinates user actions.
+- `src/ui/views` renders each screen as a view from application state; it owns no persistence or navigation side effects.
+- `src/ui/app.ts` coordinates navigation, event handlers, persistence, backups, and theme application.
 - `tools` contains the separate, temporary LAN ciphertext-transfer utility.
 
 Domain code does not depend on the DOM, IndexedDB, Vite, or the transfer server. Storage can therefore be replaced without rewriting reward rules, while game rules can change without migrating mutable XP totals.

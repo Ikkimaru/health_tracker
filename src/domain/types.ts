@@ -63,7 +63,23 @@ export interface DailySession {
 
 export interface AppSettings {
   displayName: string;
-  theme: "system" | "light" | "dark";
+  theme: "system" | "light" | "dark" | "custom";
+  customTheme?: ThemeColors;
+}
+
+export interface ThemeColors {
+  background: string;
+  surface: string;
+  text: string;
+  mutedText: string;
+  accent: string;
+  accentText: string;
+  border: string;
+  hero: string;
+  heroText: string;
+  success: string;
+  noticeBackground: string;
+  noticeText: string;
 }
 
 export interface AppData {
