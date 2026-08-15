@@ -65,3 +65,53 @@ test("keeps backup confirmation visible in a snackbar", async ({ page }) => {
   await expect(snackbar).toBeInViewport();
   await expect(snackbar).toBeHidden({ timeout: 6_000 });
 });
+
+test("adds and edits weight from the calendar and changes the week start", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Weight", exact: true }).click();
+  const date = page.locator("[data-weight-date]:not([disabled])").last();
+  await date.click();
+  await expect(page.locator("html")).toHaveClass(/modal-open/);
+  await page.getByLabel("Weight (kg)").fill("81.25");
+  await page.getByRole("button", { name: "Save weight" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/modal-open/);
+  await expect(page.getByText("81.25 kg")).toBeVisible();
+
+  await page.getByText("81.25 kg").click();
+  await expect(page.getByLabel("Weight (kg)")).toHaveValue("81.25");
+  await page.getByLabel("Weight (kg)").fill("80.75");
+  await page.getByRole("button", { name: "Save weight" }).click();
+  await expect(page.getByText("80.75 kg")).toBeVisible();
+
+  await page.locator("[data-weight-date]:not([disabled])").nth(-2).click();
+  await page.getByLabel("Weight (kg)").fill("81.5");
+  await page.getByRole("button", { name: "Save weight" }).click();
+  await expect(page.locator(".weight-value-label")).toHaveCount(2);
+  const points = page.locator("[data-chart-point]");
+  await points.first().locator("circle").click();
+  await expect(points.first()).toHaveClass(/selected/);
+  await points.last().locator("circle").click();
+  await expect(points.first()).not.toHaveClass(/selected/);
+  await expect(points.last()).toHaveClass(/selected/);
+
+  await page.locator("[data-weight-date].has-weight").first().click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete record" }).click();
+  await expect(page.locator("[data-weight-date].has-weight")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByLabel("Start of week").selectOption("sunday");
+  await page.getByRole("button", { name: "Save calendar settings" }).click();
+  await page.getByRole("button", { name: "Weight", exact: true }).click();
+  await expect(page.locator(".calendar-head b").first()).toHaveText("S");
+  const currentMonth = await page.locator(".calendar-month-nav h3").textContent();
+  await page.getByRole("button", { name: "Previous month" }).click();
+  await expect(page.locator(".calendar-month-nav h3")).not.toHaveText(currentMonth!);
+  await page.getByRole("button", { name: "Next month" }).click();
+  await expect(page.locator(".calendar-month-nav h3")).toHaveText(currentMonth!);
+  await expect(page.getByRole("button", { name: "Next month" })).toBeDisabled();
+  await page.getByRole("button", { name: "1 month" }).click();
+  await expect(page.getByRole("button", { name: "Monthly" })).toBeDisabled();
+  await page.getByRole("button", { name: "3 months" }).click();
+  await expect(page.getByRole("button", { name: "Monthly" })).toBeEnabled();
+});

@@ -44,6 +44,18 @@ describe("Supabase backups", () => {
     );
   });
 
+  it("normalizes weight entries and forecast settings", () => {
+    const migration = readFileSync(
+      new URL("../supabase/migrations/20260817090000_add_weight_tracking.sql", import.meta.url),
+      "utf8"
+    );
+    expect(migration).toContain("create table public.weight_entries");
+    expect(migration).toContain("primary key (snapshot_id, entry_date)");
+    expect(migration).toContain("weight_trend_method");
+    expect(migration).toContain("weight_calendar_week_start");
+    expect(migration).toContain("enable row level security");
+  });
+
   it("restricts the registered-user directory to developers", () => {
     const migration = readFileSync(
       new URL("../supabase/migrations/20260816100000_add_app_user_roles.sql", import.meta.url),

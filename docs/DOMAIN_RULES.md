@@ -31,3 +31,12 @@ These are replaceable policies. Change the policy and its focused specifications
 - Custom mode stores a complete palette locally, including page, surface, text, secondary text, accent, button text, border, banner, success, and notice colors.
 - Theme edits affect an isolated live preview until explicitly saved.
 - Custom palettes are part of local settings and encrypted backups; they are never published with the application.
+
+## Weight tracking
+
+- At most one positive weight reading is stored per local calendar date; saving the same date updates it.
+- Missing dates are absent rather than represented by null values.
+- Goal dates are mathematical extrapolations, not medical guidance or guarantees.
+- The selectable methods are ordinary least-squares, 30-day half-life weighted least-squares, and the outlier-resistant Theil–Sen median slope.
+- Weight entries use a dedicated relational table; daily rows remain small, queryable, and easier to validate than month-keyed JSON.
+- The weight calendar starts on Monday by default and can be changed to Sunday in settings.

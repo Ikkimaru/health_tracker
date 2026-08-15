@@ -65,6 +65,17 @@ export interface AppSettings {
   displayName: string;
   theme: "system" | "light" | "dark" | "custom";
   customTheme?: ThemeColors;
+  goalWeightKg?: number;
+  goalWeightDeadline?: string;
+  weightTrendMethod?: WeightTrendMethod;
+  weightCalendarWeekStart?: "sunday" | "monday";
+}
+
+export type WeightTrendMethod = "linear" | "weighted" | "theil-sen";
+
+export interface WeightEntry {
+  date: string;
+  weightKg: number;
 }
 
 export interface ThemeColors {
@@ -87,6 +98,7 @@ export interface AppData {
   exercises: Exercise[];
   routines: Routine[];
   sessions: DailySession[];
+  weights: WeightEntry[];
   settings: AppSettings;
 }
 

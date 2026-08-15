@@ -1,5 +1,17 @@
 # Implementation log
 
+## Weight tracking
+
+- Added same-day capture on Today and a dedicated Weight view with historical date editing, calendar history, range-filtered line charts, and a dotted selectable trend.
+- Added goal weight, deadline, and three forecast methods to Settings. Forecasts are descriptive mathematical extrapolations with an explicit health disclaimer.
+- Stored cloud weight readings as constrained one-date-per-row records rather than monthly JSON; older local and cloud snapshots restore with empty weight history and default linear forecasting.
+- Made calendar dates the historical add/edit control and added a Monday-or-Sunday week-start preference.
+- Strengthened the modal overlay and scroll lock, added week-start date labels to the chart, and added range-aware daily, weekly, and monthly dot aggregation.
+- Anchored finite chart ranges to today, limited the trend line to observed-and-future time, and reserved dense day-number labels for the one-month daily view.
+- Added weight labels to chart points and selectable horizontal-and-vertical crosshairs for visual comparisons.
+- Added explicit previous/next month calendar navigation and confirmed deletion for existing weight records.
+- Hid the Today weight-entry card after that day's reading has been captured; later edits remain in the calendar.
+
 ## 2026-08-15 — Registration date format
 
 - Standardized developer-directory registration dates as `yyyy-mm-dd`.

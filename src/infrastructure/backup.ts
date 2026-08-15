@@ -68,6 +68,8 @@ export function validateAppData(value: unknown): asserts value is AppData {
   ) {
     throw new Error("This backup schema is not supported.");
   }
+  data.weights ??= [];
+  data.settings ??= { displayName: "Adventurer", theme: "system" };
 }
 
 export async function openBackup(raw: string, password: string): Promise<AppData> {

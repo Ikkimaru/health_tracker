@@ -23,7 +23,8 @@ user directory only to developers.
 | Table                    | Purpose                                                  | Important columns                                                                                 |
 | ------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `app_snapshots`          | Snapshot identity, owner, version, and retention order   | `id`, `user_id`, `schema_version`, `created_at`                                                   |
-| `app_settings`           | One settings record per snapshot                         | `snapshot_id`, `user_id`, `display_name`, `theme`, `custom_theme`                                 |
+| `app_settings`           | One settings record per snapshot                         | `snapshot_id`, `user_id`, display/theme, weight goal/deadline, trend method, calendar week start  |
+| `weight_entries`         | One body-weight reading per recorded local date          | `snapshot_id`, `user_id`, `entry_date`, `weight_kg`                                               |
 | `exercises`              | Exercise definitions in a snapshot                       | `snapshot_id`, `id`, `position`, `name`, `measurement_kind`, prescription defaults, archive state |
 | `routines`               | Routine definitions in a snapshot                        | `snapshot_id`, `id`, `position`, `name`, archive state                                            |
 | `routine_items`          | Ordered exercise configuration inside a routine          | `snapshot_id`, `routine_id`, `id`, `position`, `exercise_id`, overrides                           |

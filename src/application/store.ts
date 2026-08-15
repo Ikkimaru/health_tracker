@@ -11,6 +11,7 @@ export const emptyData = (): AppData => ({
   exercises: [],
   routines: [],
   sessions: [],
+  weights: [],
   settings: { displayName: "Adventurer", theme: "system" }
 });
 

@@ -51,6 +51,10 @@ const textValues = (values: FormData, key: string): string[] =>
 export class HealthQuestApp {
   private data!: AppData;
   private view: View = "today";
+  private weightRange = "3";
+  private weightDotInterval = "daily";
+  private weightCalendarMonth = todayKey().slice(0, 7);
+  private selectedWeightDate = "";
   private message = "";
   private readonly cloud = new SupabaseBackups(
     import.meta.env.VITE_SUPABASE_URL ?? "",
@@ -71,7 +75,10 @@ export class HealthQuestApp {
       this.message = "The saved Supabase session could not be restored.";
     }
     this.data = await this.repository.load();
+    this.data.weights ??= [];
     this.data.settings.customTheme ??= defaultCustomTheme();
+    this.data.settings.weightTrendMethod ??= "linear";
+    this.data.settings.weightCalendarWeekStart ??= "monday";
     await this.syncOnRefresh();
     this.applyTheme();
     await this.ensureToday();
@@ -227,9 +234,20 @@ export class HealthQuestApp {
 
   private render(): void {
     window.clearTimeout(this.snackbarTimer);
-    this.root.innerHTML = this.layout(renderView(this.view, this.data));
+    this.root.innerHTML = this.layout(
+      renderView(
+        this.view,
+        this.data,
+        this.weightRange,
+        this.selectedWeightDate,
+        this.weightDotInterval,
+        this.weightCalendarMonth
+      )
+    );
     this.addSupabasePanel();
     this.bindEvents();
+    this.root.querySelector<HTMLDialogElement>(".weight-editor")?.showModal();
+    document.documentElement.classList.toggle("modal-open", Boolean(this.selectedWeightDate));
     if (this.message) {
       const renderedMessage = this.message;
       this.snackbarTimer = window.setTimeout(() => {
@@ -317,6 +335,67 @@ export class HealthQuestApp {
         }
       })
     );
+    this.root.querySelectorAll<HTMLButtonElement>("[data-weight-range]").forEach((button) =>
+      button.addEventListener("click", () => {
+        this.weightRange = button.dataset.weightRange!;
+        if (this.weightRange === "1" && this.weightDotInterval === "monthly") {
+          this.weightDotInterval = "weekly";
+        }
+        this.render();
+      })
+    );
+    this.root.querySelectorAll<HTMLButtonElement>("[data-dot-interval]").forEach((button) =>
+      button.addEventListener("click", () => {
+        this.weightDotInterval = button.dataset.dotInterval!;
+        this.render();
+      })
+    );
+    this.root.querySelectorAll<SVGGElement>("[data-chart-point]").forEach((point) => {
+      const toggle = () => {
+        const selected = point.classList.contains("selected");
+        this.root
+          .querySelectorAll<SVGGElement>("[data-chart-point]")
+          .forEach((item) => item.classList.remove("selected"));
+        if (!selected) point.classList.add("selected");
+      };
+      point.addEventListener("click", toggle);
+      point.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        toggle();
+      });
+    });
+    this.root.querySelectorAll<HTMLButtonElement>("[data-weight-date]").forEach((button) =>
+      button.addEventListener("click", () => {
+        this.selectedWeightDate = button.dataset.weightDate!;
+        this.render();
+        this.root.querySelector<HTMLInputElement>("#calendar-weight-input")?.focus();
+      })
+    );
+    this.root.querySelectorAll<HTMLButtonElement>("[data-calendar-month]").forEach((button) =>
+      button.addEventListener("click", () => {
+        this.weightCalendarMonth = button.dataset.calendarMonth!;
+        this.render();
+      })
+    );
+    this.root
+      .querySelector<HTMLButtonElement>("#cancel-weight-edit")
+      ?.addEventListener("click", () => {
+        this.selectedWeightDate = "";
+        this.render();
+      });
+    this.root
+      .querySelector<HTMLButtonElement>("[data-delete-weight]")
+      ?.addEventListener(
+        "click",
+        (event) =>
+          void this.deleteWeight((event.currentTarget as HTMLButtonElement).dataset.deleteWeight!)
+      );
+    this.root.querySelector<HTMLDialogElement>(".weight-editor")?.addEventListener("close", () => {
+      this.selectedWeightDate = "";
+      document.documentElement.classList.remove("modal-open");
+      this.render();
+    });
     this.root
       .querySelector<HTMLFormElement>("#exercise-form")
       ?.addEventListener("submit", (event) => void this.addExercise(event));
@@ -326,6 +405,18 @@ export class HealthQuestApp {
     this.root
       .querySelector<HTMLFormElement>("#profile-form")
       ?.addEventListener("submit", (event) => void this.saveProfile(event));
+    this.root
+      .querySelector<HTMLFormElement>("#today-weight-form")
+      ?.addEventListener("submit", (event) => void this.saveWeight(event, true));
+    this.root
+      .querySelector<HTMLFormElement>("#weight-entry-form")
+      ?.addEventListener("submit", (event) => void this.saveWeight(event, false));
+    this.root
+      .querySelector<HTMLFormElement>("#weight-settings-form")
+      ?.addEventListener("submit", (event) => void this.saveWeightSettings(event));
+    this.root
+      .querySelector<HTMLFormElement>("#calendar-settings-form")
+      ?.addEventListener("submit", (event) => void this.saveCalendarSettings(event));
     this.root
       .querySelector<HTMLFormElement>("#theme-form")
       ?.addEventListener("submit", (event) => void this.saveTheme(event));
@@ -425,6 +516,63 @@ export class HealthQuestApp {
     this.data.settings.displayName = textValue(values, "displayName") || "Adventurer";
     await this.persist();
     this.message = "Profile saved.";
+    this.render();
+  }
+
+  private async saveWeight(event: SubmitEvent, today: boolean): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const date = today ? todayKey() : textValue(values, "date");
+    const weightKg = Number(textValue(values, "weightKg"));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(weightKg) || weightKg <= 0) {
+      this.message = "Enter a valid date and weight greater than zero.";
+      this.render();
+      return;
+    }
+    const existing = this.data.weights.find((entry) => entry.date === date);
+    if (existing) existing.weightKg = weightKg;
+    else this.data.weights.push({ date, weightKg });
+    this.data.weights.sort((a, b) => a.date.localeCompare(b.date));
+    await this.persist();
+    if (!today) this.selectedWeightDate = "";
+    this.message = `Weight for ${date} ${existing ? "updated" : "saved"}.`;
+    this.render();
+  }
+
+  private async deleteWeight(date: string): Promise<void> {
+    const existing = this.data.weights.find((entry) => entry.date === date);
+    if (!existing || !confirm(`Delete the weight recorded for ${date}?`)) return;
+    this.data.weights = this.data.weights.filter((entry) => entry.date !== date);
+    this.selectedWeightDate = "";
+    await this.persist();
+    this.message = `Weight for ${date} deleted.`;
+    this.render();
+  }
+
+  private async saveWeightSettings(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const goal = textValue(values, "goalWeightKg");
+    this.data.settings.goalWeightKg = goal ? Number(goal) : undefined;
+    this.data.settings.goalWeightDeadline = textValue(values, "goalWeightDeadline") || undefined;
+    this.data.settings.weightTrendMethod = textValue(
+      values,
+      "weightTrendMethod"
+    ) as AppData["settings"]["weightTrendMethod"];
+    await this.persist();
+    this.message = "Weight goal and trend method saved.";
+    this.render();
+  }
+
+  private async saveCalendarSettings(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    this.data.settings.weightCalendarWeekStart = textValue(
+      values,
+      "weightCalendarWeekStart"
+    ) as AppData["settings"]["weightCalendarWeekStart"];
+    await this.persist();
+    this.message = "Calendar settings saved.";
     this.render();
   }
 
