@@ -9,6 +9,6 @@ The first release intentionally focuses on exercise planning and completion. Pos
 - mood, stress, energy, and habit tracking;
 - configurable goals, quests, reward formulas, and statistics;
 - reminders and Android health-device integrations;
-- conflict-aware synchronization beyond the current encrypted Supabase snapshot backup.
+- conflict-aware synchronization beyond the current Supabase snapshot backup.
 
 New modules should share date, units, privacy, backup, and achievement concepts only where that reduces actual duplication. Do not generalize the exercise model preemptively.

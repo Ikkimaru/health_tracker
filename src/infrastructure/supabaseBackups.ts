@@ -1,9 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { BackupEnvelope } from "../domain/types";
+import type { AppData } from "../domain/types";
 
 // cspell:ignore supabase
 
-const TABLE = "encrypted_backups";
+const TABLE = "app_backups";
 
 export interface SupabaseBackupSummary {
   id: string;
@@ -13,7 +13,7 @@ export interface SupabaseBackupSummary {
 interface BackupRow {
   id: string;
   created_at: string;
-  envelope: BackupEnvelope;
+  data: unknown;
 }
 
 export class SupabaseBackups {
@@ -90,10 +90,10 @@ export class SupabaseBackups {
     }));
   }
 
-  async upload(envelope: BackupEnvelope, retain = 5): Promise<void> {
+  async upload(data: AppData, retain = 5): Promise<void> {
     const userId = this.requireUser();
     const client = this.requireClient();
-    const { error } = await client.from(TABLE).insert({ user_id: userId, envelope });
+    const { error } = await client.from(TABLE).insert({ user_id: userId, data });
     if (error) throw error;
     const backups = await this.list();
     const expired = backups.slice(retain).map(({ id }) => id);
@@ -102,11 +102,11 @@ export class SupabaseBackups {
     if (deleteError) throw deleteError;
   }
 
-  async downloadLatest(): Promise<{ summary: SupabaseBackupSummary; raw: string }> {
+  async downloadLatest(): Promise<{ summary: SupabaseBackupSummary; data: unknown }> {
     this.requireUser();
     const { data, error } = await this.requireClient()
       .from(TABLE)
-      .select("id, created_at, envelope")
+      .select("id, created_at, data")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle<BackupRow>();
@@ -114,7 +114,7 @@ export class SupabaseBackups {
     if (!data) throw new Error("No Supabase backup was found.");
     return {
       summary: { id: data.id, createdAt: data.created_at },
-      raw: JSON.stringify(data.envelope)
+      data: data.data
     };
   }
 }

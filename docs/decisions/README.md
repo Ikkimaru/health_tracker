@@ -11,5 +11,5 @@ Decisions document why an approach was selected and make replacement explicit. E
 | Derived progression                           | accepted | Avoids mutable XP drift and makes historical corrections deterministic   |
 | Encrypted replacement backups                 | accepted | Simple, inspectable device transfer without merge ambiguity              |
 | One-use LAN QR utility                        | accepted | Convenient local transfer without storing data in a cloud service        |
-| Optional encrypted Supabase snapshots         | accepted | RLS-isolated account recovery without making cloud storage authoritative |
+| Optional Supabase snapshots                   | accepted | RLS-isolated account recovery without making cloud storage authoritative |
 | Private agent configuration excluded from Git | accepted | Repository clones must not receive owner-specific instructions           |

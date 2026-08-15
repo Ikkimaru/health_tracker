@@ -15,7 +15,7 @@ npm run dev
 
 Open the displayed address. On Android, deploy to HTTPS (such as GitHub Pages), open it in Chrome, and choose **Install app** from the browser menu. After the first successful load, the app works offline.
 
-## Enable encrypted Supabase backup
+## Enable Supabase backup
 
 Supabase backup is optional. Without configuration, every local and file-backup feature continues
 to work.
@@ -31,10 +31,10 @@ to work.
 4. Add those two values as GitHub repository variables with the same names. The Pages workflow
    passes them to the production build. Restart the local server or redeploy the app.
 
-In Settings, create an account or sign in, enter a separate backup-encryption password, and choose
-**Back up now**. The app keeps the newest five encrypted snapshots. Later edits are backed up
-automatically while the tab remains open and remembers the encryption password. Supabase persists
-the authentication session locally; the encryption password remains in memory only.
+In Settings, create an account or sign in, then choose **Back up now**. The newest five snapshots are
+retained, and later edits are backed up automatically while the tab remains open. Supabase persists
+the authentication session locally. Cloud records are protected by authentication and Row Level
+Security but are not encrypted with a separate application password.
 
 ## Verify the application
 

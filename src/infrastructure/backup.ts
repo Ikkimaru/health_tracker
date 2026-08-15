@@ -57,7 +57,7 @@ export async function createBackup(data: AppData, password: string): Promise<Bac
   };
 }
 
-function validateData(value: unknown): asserts value is AppData {
+export function validateAppData(value: unknown): asserts value is AppData {
   if (!value || typeof value !== "object") throw new Error("Backup data is missing.");
   const data = value as Partial<AppData>;
   if (
@@ -94,7 +94,7 @@ export async function openBackup(raw: string, password: string): Promise<AppData
       Uint8Array.from(fromBase64(envelope.ciphertext)).buffer
     );
     const data: unknown = JSON.parse(decoder.decode(plaintext));
-    validateData(data);
+    validateAppData(data);
     return data;
   } catch (error) {
     if (error instanceof Error && error.message.includes("schema")) throw error;

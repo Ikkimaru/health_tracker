@@ -10,14 +10,13 @@ The password is never saved and cannot be recovered. Import authenticates, decry
 
 ## Optional Supabase backup
 
-When configured and explicitly used, the app stores encrypted backup envelopes in Supabase.
-Supabase receives ciphertext plus account email, identifiers, timestamps, sizes, authentication,
+When configured and explicitly used, the app stores application data in Supabase. Supabase can
+process readable health records plus account email, identifiers, timestamps, sizes, authentication,
 and network metadata. Row Level Security restricts each signed-in user to their own records. The
 public browser key is not a secret and grants no bypass of those policies; a service-role key must
-never be included in the app. Supabase Auth persists its session in browser storage, but the backup
-encryption password is held only in memory and cannot be recovered.
+never be included in the app. Supabase Auth persists its session in browser storage.
 
-Database constraints reject encrypted envelopes larger than 5 MB, and a database trigger retains
+Database constraints reject documents larger than 5 MB, and a database trigger retains
 only the newest five snapshots per account. These limits are enforced even when a caller bypasses
 the application interface and sends requests directly to the Data API.
 

@@ -21,11 +21,10 @@ Routines reference exercise definitions. The first time a scheduled date is open
 
 IndexedDB holds one versioned application document. Imports decrypt and validate a full replacement before asking for confirmation and writing it, preventing partially restored state.
 
-The optional Supabase adapter uploads the same encrypted replacement envelope into a Postgres row
-owned by the authenticated user. IndexedDB remains authoritative and offline-capable. Supabase Auth
-persists its browser session, while backup passwords exist only in memory. After a successful manual
-cloud backup, changes schedule further encrypted snapshots for the remainder of that open session.
-Restore remains an explicit full replacement rather than unsafe last-write-wins synchronization.
+The optional Supabase adapter uploads the application document into a Postgres row owned by the
+authenticated user. IndexedDB remains authoritative and offline-capable. Supabase Auth persists its
+browser session, and signed-in changes can schedule further snapshots. Restore remains an explicit
+full replacement rather than unsafe last-write-wins synchronization.
 
 ## PWA lifecycle
 
@@ -36,7 +35,7 @@ Vite creates fingerprinted static assets. A small service worker fetches navigat
 | Package                 | Purpose                                                                  | Removal path                                        |
 | ----------------------- | ------------------------------------------------------------------------ | --------------------------------------------------- |
 | `qrcode`                | Correct QR encoding for LAN pairing                                      | Replace the terminal QR with a manually entered URL |
-| `@supabase/supabase-js` | Account authentication and encrypted snapshot persistence                | Retain local and file backups only                  |
+| `@supabase/supabase-js` | Account authentication and snapshot persistence                          | Retain local and file backups only                  |
 | `vite`                  | Development server and static build                                      | Use `tsc` plus a custom static build script         |
 | `typescript`            | Static checking                                                          | Convert sources to browser JavaScript               |
 | `vitest`                | Readable unit and adapter tests                                          | Use Node's test runner after compiling tests        |

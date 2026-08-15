@@ -10,7 +10,7 @@ import {
 } from "../application/theme";
 import { calculateProgress, createSession, exerciseComplete, todayKey } from "../domain/rules";
 import type { AppData, Exercise, MeasurementKind, Routine, ThemeColors } from "../domain/types";
-import { createBackup, openBackup } from "../infrastructure/backup";
+import { createBackup, openBackup, validateAppData } from "../infrastructure/backup";
 import { SupabaseBackups } from "../infrastructure/supabaseBackups";
 import { labels, renderView, type View } from "./views";
 const escapeHtml = (value: unknown) => {
@@ -47,7 +47,6 @@ export class HealthQuestApp {
     import.meta.env.VITE_SUPABASE_URL ?? "",
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? ""
   );
-  private cloudPassword = "";
   private cloudBackupTimer?: number;
 
   constructor(
@@ -123,7 +122,7 @@ export class HealthQuestApp {
     );
     const accountStatus = this.cloud.signedIn
       ? `Signed in as ${escapeHtml(this.cloud.email)}.`
-      : "Create an account or sign in to keep encrypted backups.";
+      : "Create an account or sign in to keep cloud backups.";
     const signedInControls =
       '<div class="actions"><button id="supabase-backup" class="primary">Back up now</button><button id="supabase-restore" class="button">Restore latest</button><button id="supabase-signout" class="quiet">Sign out</button></div>';
     const authenticationForm =
@@ -134,7 +133,7 @@ export class HealthQuestApp {
       : "<small>Supabase requires deployment URL and publishable-key configuration. See the README.</small>";
     transfer?.insertAdjacentHTML(
       "beforebegin",
-      `<div class="panel"><h3>Encrypted Supabase backup</h3><p>${accountStatus} The newest five snapshots are retained.</p>${controls}${configurationNote}</div>`
+      `<div class="panel"><h3>Supabase backup</h3><p>${accountStatus} The newest five snapshots are retained.</p>${controls}${configurationNote}</div>`
     );
   }
 
@@ -358,14 +357,14 @@ export class HealthQuestApp {
 
   private async persist(): Promise<void> {
     await this.repository.save(this.data);
-    if (!this.cloud.signedIn || !this.cloudPassword) return;
+    if (!this.cloud.signedIn) return;
     window.clearTimeout(this.cloudBackupTimer);
     this.cloudBackupTimer = window.setTimeout(() => void this.automaticSupabaseBackup(), 1_500);
   }
 
   private async automaticSupabaseBackup(): Promise<void> {
     try {
-      await this.cloud.upload(await createBackup(this.data, this.cloudPassword));
+      await this.cloud.upload(this.data);
       this.message = "Changes saved locally and backed up to Supabase.";
     } catch (error) {
       this.message =
@@ -438,7 +437,6 @@ export class HealthQuestApp {
   private async signOutSupabase(): Promise<void> {
     try {
       await this.cloud.signOut();
-      this.cloudPassword = "";
       this.message = "Signed out of Supabase.";
     } catch (error) {
       this.message = error instanceof Error ? error.message : "Supabase sign-out failed.";
@@ -448,11 +446,9 @@ export class HealthQuestApp {
 
   private async backupToSupabase(): Promise<void> {
     try {
-      const backupPassword = this.password();
-      await this.cloud.upload(await createBackup(this.data, backupPassword));
-      this.cloudPassword = backupPassword;
+      await this.cloud.upload(this.data);
       this.message =
-        "Encrypted backup saved to Supabase. Later changes will back up automatically while this app remains open.";
+        "Backup saved to Supabase. Later changes will back up automatically while this app remains open.";
     } catch (error) {
       this.message = error instanceof Error ? error.message : "Supabase backup failed.";
     }
@@ -461,9 +457,9 @@ export class HealthQuestApp {
 
   private async restoreFromSupabase(): Promise<void> {
     try {
-      const password = this.password();
-      const { summary, raw } = await this.cloud.downloadLatest();
-      const restored = await openBackup(raw, password);
+      const { summary, data } = await this.cloud.downloadLatest();
+      validateAppData(data);
+      const restored = structuredClone(data);
       const counts = `${restored.exercises.length} exercises, ${restored.routines.length} routines, ${restored.sessions.length} sessions`;
       const date = new Date(summary.createdAt).toLocaleString();
       if (
@@ -474,7 +470,6 @@ export class HealthQuestApp {
         return;
       await this.repository.replace(restored);
       this.data = restored;
-      this.cloudPassword = password;
       this.applyTheme();
       this.message = `Supabase backup restored: ${counts}.`;
     } catch (error) {

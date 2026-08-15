@@ -1,37 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import type { BackupEnvelope } from "../src/domain/types";
+import { emptyData } from "../src/application/store";
 import { SupabaseBackups } from "../src/infrastructure/supabaseBackups";
 
 // cspell:ignore supabase
 
-const envelope: BackupEnvelope = {
-  format: "healthtracker-backup",
-  schemaVersion: 1,
-  createdAt: "2026-08-15T12:00:00.000Z",
-  encryption: {
-    algorithm: "AES-GCM",
-    derivation: "PBKDF2-SHA-256",
-    iterations: 310_000,
-    salt: "salt",
-    iv: "iv"
-  },
-  ciphertext: "encrypted-only"
-};
+const appData = emptyData();
 
 describe("Supabase backups", () => {
   it("ships row isolation, snapshot size, and server-side retention safeguards", () => {
     const migration = readFileSync(
       new URL(
-        "../supabase/migrations/20260815190000_create_encrypted_backups.sql",
+        "../supabase/migrations/20260815223000_store_readable_app_backups.sql",
         import.meta.url
       ),
       "utf8"
     );
     expect(migration).toContain("enable row level security");
     expect(migration).toContain("auth.uid()) = user_id");
-    expect(migration).toContain("octet_length(envelope::text) <= 5242880");
+    expect(migration).toContain("octet_length(data::text) <= 5242880");
     expect(migration).toContain("offset 5");
   });
 
@@ -73,9 +61,9 @@ describe("Supabase backups", () => {
     const backups = new SupabaseBackups("", "", client);
 
     await backups.initialize();
-    await backups.upload(envelope);
+    await backups.upload(appData);
 
-    expect(insert).toHaveBeenCalledWith({ user_id: "user-1", envelope });
+    expect(insert).toHaveBeenCalledWith({ user_id: "user-1", data: appData });
     expect(remove).toHaveBeenCalledWith("id", ["backup-5"]);
   });
 });
