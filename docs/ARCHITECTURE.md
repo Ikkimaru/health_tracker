@@ -23,7 +23,7 @@ IndexedDB holds one versioned application document. Imports decrypt and validate
 
 ## PWA lifecycle
 
-Vite creates fingerprinted static assets. A small service worker caches the application shell and successful GET responses. GitHub Pages hosts only those assets; browser databases and backups are not deployed.
+Vite creates fingerprinted static assets. A small service worker fetches navigations from the network first so newly deployed HTML cannot reference assets removed by a later deployment, while retaining the last successful shell as its offline fallback. Other successful GET responses are cached for offline use. GitHub Pages hosts only those assets; browser databases and backups are not deployed.
 
 ## Dependencies
 
