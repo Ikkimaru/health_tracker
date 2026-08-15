@@ -1,0 +1,31 @@
+{
+  "name": "health-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "transfer": "tsx tools/transfer.ts"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "22.17.1",
+    "@types/qrcode": "1.5.5",
+    "fake-indexeddb": "6.1.0",
+    "prettier": "3.9.6",
+    "tsx": "4.20.4",
+    "typescript": "5.9.2",
+    "vite": "6.4.3",
+    "vitest": "3.2.7"
+  }
+}

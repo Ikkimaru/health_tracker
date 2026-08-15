@@ -1,0 +1,13 @@
+dist/
+node_modules/
+coverage/
+test-results/
+playwright-report/
+.local/
+*.healthtracker
+AGENTS.md
+AGENTS.local.md
+.agents/
+.codex/
+*.agent.private.md
+

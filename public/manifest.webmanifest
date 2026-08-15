@@ -1,0 +1,13 @@
+{
+  "name": "Health Quest",
+  "short_name": "Health Quest",
+  "description": "Private, offline-first exercise tracking and achievements.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1e8",
+  "theme_color": "#16382c",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

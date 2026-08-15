@@ -1,0 +1,30 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+.env
+.env.*
+!.env.example
+
+# Personal health data and local customization
+*.healthtracker
+backups/
+exports/
+.local/
+local-profiles/
+customizations/
+
+# Private agent configuration (intentionally never shared)
+AGENTS.md
+AGENTS.local.md
+.agents/
+.codex/
+*.agent.private.md
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
