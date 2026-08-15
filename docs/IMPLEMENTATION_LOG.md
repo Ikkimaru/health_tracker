@@ -1,5 +1,20 @@
 # Implementation log
 
+## 2026-08-15 — Precise sync cooldown
+
+- Changed refresh cooldown feedback from rounded minutes to the exact remaining seconds.
+
+## 2026-08-15 — Cancellable sync conflicts
+
+- Added Local, Supabase, and Cancel outcomes when refresh reconciliation detects changes on both sides.
+- Added visible remaining-wait feedback when a refresh occurs during the one-minute cooldown.
+
+## 2026-08-15 — Refresh reconciliation
+
+- Added once-per-minute refresh reconciliation using the last common local fingerprint and Supabase snapshot ID.
+- Automatically restores or uploads when only one side changed and prompts when both sides changed.
+- Added latest backup and query timestamps to Settings and a one-minute restore cooldown.
+
 ## 2026-08-15 — Settings card spacing
 
 - Added consistent vertical spacing between static and dynamically inserted Settings panels.

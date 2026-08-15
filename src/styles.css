@@ -387,6 +387,26 @@ button,
   font-size: 0.72rem;
   font-weight: 800;
 }
+.sync-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 16px 0 8px;
+}
+.sync-status div {
+  min-width: 190px;
+}
+.sync-status dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.sync-status dd {
+  margin: 3px 0 0;
+  font-weight: 750;
+}
 .empty {
   text-align: center;
   color: var(--muted);

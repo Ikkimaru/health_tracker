@@ -54,6 +54,10 @@ export class SupabaseBackups {
     return this.userEmail;
   }
 
+  get accountId(): string {
+    return this.userId;
+  }
+
   get role(): AppUserRole {
     return this.userRole;
   }
@@ -138,25 +142,33 @@ export class SupabaseBackups {
     }));
   }
 
-  async upload(data: AppData, retain = 5): Promise<void> {
+  async upload(data: AppData, retain = 5): Promise<SupabaseBackupSummary> {
     this.requireUser();
     const client = this.requireClient();
     const { error } = await client.rpc("store_app_snapshot", { document: data });
     if (error) throw error;
     const backups = await this.list();
     const expired = backups.slice(retain).map(({ id }) => id);
-    if (!expired.length) return;
-    const { error: deleteError } = await client.from(SNAPSHOTS_TABLE).delete().in("id", expired);
-    if (deleteError) throw deleteError;
+    if (expired.length) {
+      const { error: deleteError } = await client.from(SNAPSHOTS_TABLE).delete().in("id", expired);
+      if (deleteError) throw deleteError;
+    }
+    return backups[0]!;
   }
 
   async downloadLatest(): Promise<{ summary: SupabaseBackupSummary; data: unknown }> {
+    const latest = await this.queryLatest();
+    if (!latest) throw new Error("No Supabase backup was found.");
+    return latest;
+  }
+
+  async queryLatest(): Promise<{ summary: SupabaseBackupSummary; data: unknown } | undefined> {
     this.requireUser();
     const { data, error } = await this.requireClient()
       .rpc("download_latest_app_snapshot")
       .maybeSingle<BackupRow>();
     if (error) throw error;
-    if (!data) throw new Error("No Supabase backup was found.");
+    if (!data) return undefined;
     return {
       summary: { id: data.id, createdAt: data.created_at },
       data: data.data

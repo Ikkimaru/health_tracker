@@ -1,5 +1,14 @@
 import type { DataRepository } from "../application/store";
 import {
+  decideSync,
+  fingerprint,
+  formatCooldownRemaining,
+  formatSyncDate,
+  parseConflictChoice,
+  SYNC_COOLDOWN_MS,
+  type SyncMetadata
+} from "../application/sync";
+import {
   applyThemeVariables,
   darkTheme,
   defaultCustomTheme,
@@ -63,9 +72,115 @@ export class HealthQuestApp {
     }
     this.data = await this.repository.load();
     this.data.settings.customTheme ??= defaultCustomTheme();
+    await this.syncOnRefresh();
     this.applyTheme();
     await this.ensureToday();
     this.render();
+  }
+
+  private syncStorageKey(): string {
+    return `health-quest-sync:${this.cloud.accountId}`;
+  }
+
+  private syncMetadata(): SyncMetadata {
+    if (!this.cloud.accountId) return {};
+    try {
+      return JSON.parse(localStorage.getItem(this.syncStorageKey()) ?? "{}") as SyncMetadata;
+    } catch {
+      return {};
+    }
+  }
+
+  private saveSyncMetadata(metadata: SyncMetadata): void {
+    if (!this.cloud.accountId) return;
+    try {
+      localStorage.setItem(this.syncStorageKey(), JSON.stringify(metadata));
+    } catch {
+      // Sync still works for this page load when browser storage is unavailable.
+    }
+  }
+
+  private async recordBackup(summary: { id: string; createdAt: string }): Promise<void> {
+    const metadata = this.syncMetadata();
+    this.saveSyncMetadata({
+      ...metadata,
+      snapshotId: summary.id,
+      localHash: await fingerprint(this.data),
+      lastBackupAt: summary.createdAt
+    });
+  }
+
+  private async syncOnRefresh(): Promise<void> {
+    if (!this.cloud.signedIn) return;
+    const metadata = this.syncMetadata();
+    const now = Date.now();
+    if (metadata.lastQueryAt && now - new Date(metadata.lastQueryAt).getTime() < SYNC_COOLDOWN_MS) {
+      const elapsed = now - new Date(metadata.lastQueryAt).getTime();
+      const remaining = formatCooldownRemaining(SYNC_COOLDOWN_MS - elapsed);
+      this.message = `Please wait ${remaining} before the next refresh backup or restore can occur.`;
+      return;
+    }
+    const queriedAt = new Date(now).toISOString();
+    this.saveSyncMetadata({ ...metadata, lastQueryAt: queriedAt });
+    try {
+      const latest = await this.cloud.queryLatest();
+      if (!latest) {
+        const summary = await this.cloud.upload(this.data);
+        await this.recordBackup(summary);
+        this.message = "Local data backed up to Supabase on refresh.";
+        return;
+      }
+      validateAppData(latest.data);
+      const cloudData = structuredClone(latest.data);
+      const localHash = await fingerprint(this.data);
+      const cloudHash = await fingerprint(cloudData);
+      const decision = decideSync(metadata, localHash, cloudHash, latest.summary.id);
+      this.saveSyncMetadata({
+        ...this.syncMetadata(),
+        lastBackupAt: latest.summary.createdAt
+      });
+      if (decision === "none") {
+        this.saveSyncMetadata({
+          ...this.syncMetadata(),
+          snapshotId: latest.summary.id,
+          localHash
+        });
+        return;
+      }
+      let useCloud = decision === "restore";
+      if (decision === "conflict") {
+        const answer = parseConflictChoice(
+          prompt(
+            "Local and Supabase data both changed. Type LOCAL to keep and upload this device's data, type SUPABASE to restore cloud data, or select Cancel to do nothing."
+          )
+        );
+        if (answer !== "local" && answer !== "supabase") {
+          this.message = "Conflict resolution cancelled. No data was changed.";
+          return;
+        }
+        useCloud = answer === "supabase";
+      }
+      if (useCloud) {
+        await this.repository.replace(cloudData);
+        this.data = cloudData;
+        this.saveSyncMetadata({
+          ...this.syncMetadata(),
+          snapshotId: latest.summary.id,
+          localHash: cloudHash,
+          lastRestoreAt: new Date().toISOString()
+        });
+        this.message = "Latest Supabase data restored on refresh.";
+      } else {
+        const summary = await this.cloud.upload(this.data);
+        await this.recordBackup(summary);
+        this.message =
+          decision === "conflict"
+            ? "Local data kept and backed up to Supabase."
+            : "Local changes backed up to Supabase on refresh.";
+      }
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : "Refresh sync failed.";
+    }
   }
 
   private async ensureToday(): Promise<void> {
@@ -138,12 +253,16 @@ export class HealthQuestApp {
     const authenticationForm =
       '<form id="supabase-auth" class="form-grid"><label class="wide">Email<input name="email" type="email" autocomplete="email" required/></label><label class="wide">Account password<input name="accountPassword" type="password" autocomplete="current-password" minlength="8" required/></label><div class="actions wide"><button name="action" value="signin" class="primary">Sign in</button><button name="action" value="signup" class="button">Create account</button></div></form>';
     const controls = this.cloud.signedIn ? signedInControls : authenticationForm;
+    const sync = this.syncMetadata();
+    const syncStatus = this.cloud.signedIn
+      ? `<dl class="sync-status"><div><dt>Last backup</dt><dd>${escapeHtml(formatSyncDate(sync.lastBackupAt))}</dd></div><div><dt>Latest query</dt><dd>${escapeHtml(formatSyncDate(sync.lastQueryAt))}</dd></div></dl>`
+      : "";
     const configurationNote = this.cloud.configured
       ? ""
       : "<small>Supabase requires deployment URL and publishable-key configuration. See the README.</small>";
     transfer?.insertAdjacentHTML(
       "beforebegin",
-      `<div class="panel"><h3>Supabase backup</h3><p>${accountStatus} The newest five snapshots are retained.</p>${controls}${configurationNote}</div>`
+      `<div class="panel"><h3>Supabase backup</h3><p>${accountStatus} The newest five snapshots are retained.</p>${syncStatus}${controls}${configurationNote}</div>`
     );
     if (this.cloud.role === "developer") {
       transfer?.insertAdjacentHTML(
@@ -402,7 +521,8 @@ export class HealthQuestApp {
 
   private async automaticSupabaseBackup(): Promise<void> {
     try {
-      await this.cloud.upload(this.data);
+      const summary = await this.cloud.upload(this.data);
+      await this.recordBackup(summary);
       this.message = "Changes saved locally and backed up to Supabase.";
     } catch (error) {
       this.message =
@@ -484,7 +604,8 @@ export class HealthQuestApp {
 
   private async backupToSupabase(): Promise<void> {
     try {
-      await this.cloud.upload(this.data);
+      const summary = await this.cloud.upload(this.data);
+      await this.recordBackup(summary);
       this.message =
         "Backup saved to Supabase. Later changes will back up automatically while this app remains open.";
     } catch (error) {
@@ -495,6 +616,16 @@ export class HealthQuestApp {
 
   private async restoreFromSupabase(): Promise<void> {
     try {
+      const sync = this.syncMetadata();
+      if (
+        sync.lastRestoreAt &&
+        Date.now() - new Date(sync.lastRestoreAt).getTime() < SYNC_COOLDOWN_MS
+      ) {
+        this.message = "Restore is available one minute after the previous restore.";
+        this.render();
+        return;
+      }
+      this.saveSyncMetadata({ ...sync, lastQueryAt: new Date().toISOString() });
       const { summary, data } = await this.cloud.downloadLatest();
       validateAppData(data);
       const restored = structuredClone(data);
@@ -509,6 +640,13 @@ export class HealthQuestApp {
       await this.repository.replace(restored);
       this.data = restored;
       this.applyTheme();
+      this.saveSyncMetadata({
+        ...this.syncMetadata(),
+        snapshotId: summary.id,
+        localHash: await fingerprint(restored),
+        lastBackupAt: summary.createdAt,
+        lastRestoreAt: new Date().toISOString()
+      });
       this.message = `Supabase backup restored: ${counts}.`;
     } catch (error) {
       this.message = error instanceof Error ? error.message : "Supabase restore failed.";

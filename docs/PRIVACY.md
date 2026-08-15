@@ -28,6 +28,11 @@ Cloud restore validates and decrypts the newest snapshot before asking to replac
 feature is backup and recovery, not conflict-aware synchronization between simultaneously edited
 devices.
 
+Refresh reconciliation compares a SHA-256 fingerprint of the local application document with the
+latest Supabase snapshot. Per-account synchronization IDs, fingerprints, and timestamps are stored
+in browser local storage; the fingerprint is not a copy of the underlying health records. Conflicts
+require the user to choose which complete version replaces the other.
+
 ## QR LAN transfer
 
 The QR contains an HTTP address on the computer's LAN, the selected direction, and a random 192-bit token. It does not contain health data or a password. The temporary server:

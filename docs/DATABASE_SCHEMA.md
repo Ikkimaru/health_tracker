@@ -78,6 +78,9 @@ IndexedDB remains the authoritative offline store.
 | -------------------------- | ------------ | --------- | -------------------------------------------- |
 | `health-quest` (version 1) | `app-data`   | `current` | Complete schema-version-1 `AppData` document |
 
+Browser `localStorage` keeps per-account synchronization metadata: the last common snapshot ID and
+local fingerprint, plus latest backup, query, and restore timestamps. It contains no health records.
+
 The browser store intentionally remains a single document because local saves and full replacement
 imports are atomic at this boundary. The feature tables above apply to the relational Supabase
 backup boundary.

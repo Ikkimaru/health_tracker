@@ -27,6 +27,12 @@ versions and preserves the newest five. IndexedDB remains authoritative and offl
 Supabase Auth persists its browser session, and signed-in changes can schedule further snapshots.
 Restore remains an explicit full replacement rather than unsafe last-write-wins synchronization.
 
+On browser refresh, a signed-in client checks Supabase at most once per minute. A local fingerprint
+and cloud snapshot ID record the last common version. If only one side changed, that side wins; if
+both changed, the user chooses which full version to keep. The selected local version is uploaded as
+a new snapshot, while the selected cloud version atomically replaces IndexedDB. Conflict resolution
+can be cancelled without changing either version.
+
 ## PWA lifecycle
 
 Vite creates fingerprinted static assets. A small service worker fetches navigations from the network first so newly deployed HTML cannot reference assets removed by a later deployment, while retaining the last successful shell as its offline fallback. Other successful GET responses are cached for offline use. GitHub Pages hosts only those assets; browser databases and backups are not deployed.
