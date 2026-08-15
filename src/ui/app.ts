@@ -6,6 +6,7 @@ import {
   formatSyncDate,
   parseConflictChoice,
   SYNC_COOLDOWN_MS,
+  type SyncDecision,
   type SyncMetadata
 } from "../application/sync";
 import {
@@ -20,7 +21,7 @@ import {
 import { calculateProgress, createSession, exerciseComplete, todayKey } from "../domain/rules";
 import type { AppData, Exercise, MeasurementKind, Routine, ThemeColors } from "../domain/types";
 import { createBackup, openBackup, validateAppData } from "../infrastructure/backup";
-import { SupabaseBackups } from "../infrastructure/supabaseBackups";
+import { SupabaseBackups, type SupabaseBackupSummary } from "../infrastructure/supabaseBackups";
 import { labels, renderView, type View } from "./views";
 const escapeHtml = (value: unknown) => {
   let text = "";
@@ -46,7 +47,7 @@ const textValue = (values: FormData, key: string): string => {
 const textValues = (values: FormData, key: string): string[] =>
   values.getAll(key).filter((value): value is string => typeof value === "string");
 
-// cspell:ignore healthtracker supabase topbar
+// cspell:ignore cooldown healthtracker supabase topbar
 
 export class HealthQuestApp {
   private data!: AppData;
@@ -138,78 +139,110 @@ export class HealthQuestApp {
     if (!this.cloud.signedIn) return;
     const metadata = this.syncMetadata();
     const now = Date.now();
-    if (metadata.lastQueryAt && now - new Date(metadata.lastQueryAt).getTime() < SYNC_COOLDOWN_MS) {
-      const elapsed = now - new Date(metadata.lastQueryAt).getTime();
-      const remaining = formatCooldownRemaining(SYNC_COOLDOWN_MS - elapsed);
-      this.message = `Please wait ${remaining} before the next refresh backup or restore can occur.`;
-      return;
-    }
+    if (this.refreshSyncIsCoolingDown(metadata, now)) return;
     const queriedAt = new Date(now).toISOString();
     this.saveSyncMetadata({ ...metadata, lastQueryAt: queriedAt });
     try {
       const latest = await this.cloud.queryLatest();
       if (!latest) {
-        const summary = await this.cloud.upload(this.data);
-        this.cloudBaseline = structuredClone(this.data);
-        await this.recordBackup(summary);
-        this.message = "Local data backed up to Supabase on refresh.";
+        await this.uploadInitialRefreshSnapshot();
         return;
       }
-      validateAppData(latest.data);
-      const cloudData = structuredClone(latest.data);
-      const localHash = await fingerprint(this.data);
-      const cloudHash = await fingerprint(cloudData);
-      const decision = decideSync(metadata, localHash, cloudHash, latest.summary.id);
-      this.saveSyncMetadata({
-        ...this.syncMetadata(),
-        lastBackupAt: latest.summary.createdAt
-      });
-      if (decision === "none") {
-        this.cloudBaseline = structuredClone(cloudData);
-        this.saveSyncMetadata({
-          ...this.syncMetadata(),
-          snapshotId: latest.summary.id,
-          localHash
-        });
-        return;
-      }
-      let useCloud = decision === "restore";
-      if (decision === "conflict") {
-        const answer = parseConflictChoice(
-          prompt(
-            "Local and Supabase data both changed. Type LOCAL to keep and upload this device's data, type SUPABASE to restore cloud data, or select Cancel to do nothing."
-          )
-        );
-        if (answer !== "local" && answer !== "supabase") {
-          this.message = "Conflict resolution cancelled. No data was changed.";
-          return;
-        }
-        useCloud = answer === "supabase";
-      }
-      if (useCloud) {
-        await this.repository.replace(cloudData);
-        this.recoveryPoints = await this.repository.listRecoveryPoints();
-        this.data = cloudData;
-        this.cloudBaseline = structuredClone(cloudData);
-        this.saveSyncMetadata({
-          ...this.syncMetadata(),
-          snapshotId: latest.summary.id,
-          localHash: cloudHash,
-          lastRestoreAt: new Date().toISOString()
-        });
-        this.message = "Latest Supabase data restored on refresh.";
-      } else {
-        this.cloudBaseline = structuredClone(cloudData);
-        const summary = await this.uploadCloudData(this.data);
-        if (summary) await this.recordBackup(summary, this.cloudBaseline!);
-        this.message =
-          decision === "conflict"
-            ? "Local data kept and backed up to Supabase."
-            : "Local changes backed up to Supabase on refresh.";
-      }
+      await this.reconcileRefreshSnapshot(latest, metadata);
     } catch (error) {
       this.message = error instanceof Error ? error.message : "Refresh sync failed.";
     }
+  }
+
+  private refreshSyncIsCoolingDown(metadata: SyncMetadata, now: number): boolean {
+    if (!metadata.lastQueryAt) return false;
+    const elapsed = now - new Date(metadata.lastQueryAt).getTime();
+    if (elapsed >= SYNC_COOLDOWN_MS) return false;
+    const remaining = formatCooldownRemaining(SYNC_COOLDOWN_MS - elapsed);
+    this.message = `Please wait ${remaining} before the next refresh backup or restore can occur.`;
+    return true;
+  }
+
+  private async uploadInitialRefreshSnapshot(): Promise<void> {
+    const summary = await this.cloud.upload(this.data);
+    this.cloudBaseline = structuredClone(this.data);
+    await this.recordBackup(summary);
+    this.message = "Local data backed up to Supabase on refresh.";
+  }
+
+  private async reconcileRefreshSnapshot(
+    latest: { summary: SupabaseBackupSummary; data: unknown },
+    metadata: SyncMetadata
+  ): Promise<void> {
+    validateAppData(latest.data);
+    const cloudData = structuredClone(latest.data);
+    const localHash = await fingerprint(this.data);
+    const cloudHash = await fingerprint(cloudData);
+    const decision = decideSync(metadata, localHash, cloudHash, latest.summary.id);
+    this.saveSyncMetadata({ ...this.syncMetadata(), lastBackupAt: latest.summary.createdAt });
+    if (decision === "none") {
+      this.rememberMatchingCloudSnapshot(cloudData, latest.summary.id, localHash);
+      return;
+    }
+    const useCloud = this.resolveCloudConflict(decision);
+    if (useCloud === undefined) return;
+    if (useCloud) {
+      await this.restoreRefreshSnapshot(cloudData, cloudHash, latest.summary.id);
+      return;
+    }
+    await this.uploadLocalRefreshChanges(cloudData, decision);
+  }
+
+  private rememberMatchingCloudSnapshot(
+    data: AppData,
+    snapshotId: string,
+    localHash: string
+  ): void {
+    this.cloudBaseline = structuredClone(data);
+    this.saveSyncMetadata({ ...this.syncMetadata(), snapshotId, localHash });
+  }
+
+  private resolveCloudConflict(decision: SyncDecision): boolean | undefined {
+    if (decision !== "conflict") return decision === "restore";
+    const answer = parseConflictChoice(
+      prompt(
+        "Local and Supabase data both changed. Type LOCAL to keep and upload this device's data, type SUPABASE to restore cloud data, or select Cancel to do nothing."
+      )
+    );
+    if (answer === "local" || answer === "supabase") return answer === "supabase";
+    this.message = "Conflict resolution cancelled. No data was changed.";
+    return undefined;
+  }
+
+  private async restoreRefreshSnapshot(
+    cloudData: AppData,
+    cloudHash: string,
+    snapshotId: string
+  ): Promise<void> {
+    await this.repository.replace(cloudData);
+    this.recoveryPoints = await this.repository.listRecoveryPoints();
+    this.data = cloudData;
+    this.cloudBaseline = structuredClone(cloudData);
+    this.saveSyncMetadata({
+      ...this.syncMetadata(),
+      snapshotId,
+      localHash: cloudHash,
+      lastRestoreAt: new Date().toISOString()
+    });
+    this.message = "Latest Supabase data restored on refresh.";
+  }
+
+  private async uploadLocalRefreshChanges(
+    cloudData: AppData,
+    decision: SyncDecision
+  ): Promise<void> {
+    this.cloudBaseline = structuredClone(cloudData);
+    const summary = await this.uploadCloudData(this.data);
+    if (summary) await this.recordBackup(summary, this.cloudBaseline);
+    this.message =
+      decision === "conflict"
+        ? "Local data kept and backed up to Supabase."
+        : "Local changes backed up to Supabase on refresh.";
   }
 
   private async ensureToday(): Promise<void> {
@@ -323,7 +356,7 @@ export class HealthQuestApp {
       ? `<div class="recovery-list">${this.recoveryPoints
           .map(
             (point, index) =>
-              `<article><div><strong>Recovery ${index + 1}</strong><small>${escapeHtml(new Date(point.createdAt).toLocaleString())} · ${point.data.weights.length} weights · ${point.data.sessions.length} sessions</small></div><div class="actions"><button class="quiet" data-restore-recovery="${point.id}">Restore locally</button><button class="button" data-upload-recovery="${point.id}" ${this.cloud.signedIn ? "" : "disabled"}>Back up online</button></div></article>`
+              `<article><div><strong>Recovery ${index + 1}</strong><small>${escapeHtml(new Date(point.createdAt).toLocaleString())} · ${(point.data.weights ?? []).length} weights · ${(point.data.sessions ?? []).length} sessions</small></div><div class="actions"><button class="quiet" data-restore-recovery="${point.id}">Restore locally</button><button class="button" data-upload-recovery="${point.id}" ${this.cloud.signedIn ? "" : "disabled"}>Back up online</button></div></article>`
           )
           .join("")}</div>`
       : `<p class="empty">Recovery points appear here after saved changes.</p>`;
@@ -598,7 +631,7 @@ export class HealthQuestApp {
   }
 
   private async deleteWeight(date: string): Promise<void> {
-    const existing = this.data.weights.find((entry) => entry.date === date);
+    const existing = this.data.weights.some((entry) => entry.date === date);
     if (!existing || !confirm(`Delete the weight recorded for ${date}?`)) return;
     this.data.weights = this.data.weights.filter((entry) => entry.date !== date);
     this.selectedWeightDate = "";

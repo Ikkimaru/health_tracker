@@ -14,18 +14,27 @@ as $$
     case when not sort_by_identity then items.position end
   ), '[]'::jsonb)
   from (
-    select ordinality - 1 as position, value
-    from jsonb_array_elements(coalesce(original, '[]'::jsonb)) with ordinality
+    select source_item.ordinality - 1 as position, source_item.item as value
+    from jsonb_array_elements(coalesce(original, '[]'::jsonb))
+      with ordinality as source_item(item, ordinality)
     where not exists (
-      select 1 from jsonb_array_elements_text(coalesce(changes -> 'deletes', '[]'::jsonb)) deleted
-      where deleted = value ->> identity_key
+      select 1
+      from jsonb_array_elements_text(coalesce(changes -> 'deletes', '[]'::jsonb))
+        as deleted_item(identity)
+      where deleted_item.identity = source_item.item ->> identity_key
     ) and not exists (
-      select 1 from jsonb_array_elements(coalesce(changes -> 'upserts', '[]'::jsonb)) replacement
-      where replacement #>> array['value', identity_key] = value ->> identity_key
+      select 1
+      from jsonb_array_elements(coalesce(changes -> 'upserts', '[]'::jsonb))
+        as upsert_item(replacement)
+      where upsert_item.replacement -> 'value' ->> identity_key =
+        source_item.item ->> identity_key
     )
     union all
-    select (replacement ->> 'position')::integer, replacement -> 'value'
-    from jsonb_array_elements(coalesce(changes -> 'upserts', '[]'::jsonb)) replacement
+    select
+      (upsert_item.replacement ->> 'position')::integer,
+      upsert_item.replacement -> 'value'
+    from jsonb_array_elements(coalesce(changes -> 'upserts', '[]'::jsonb))
+      as upsert_item(replacement)
   ) items;
 $$;
 

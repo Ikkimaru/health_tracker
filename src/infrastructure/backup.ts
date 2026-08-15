@@ -1,3 +1,4 @@
+import { normalizeAppData } from "../application/store";
 import type { AppData, BackupEnvelope } from "../domain/types";
 
 const ITERATIONS = 310_000;
@@ -68,8 +69,7 @@ export function validateAppData(value: unknown): asserts value is AppData {
   ) {
     throw new Error("This backup schema is not supported.");
   }
-  data.weights ??= [];
-  data.settings ??= { displayName: "Adventurer", theme: "system" };
+  normalizeAppData(data as AppData);
 }
 
 export async function openBackup(raw: string, password: string): Promise<AppData> {

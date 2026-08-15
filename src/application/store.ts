@@ -14,6 +14,12 @@ export interface DataRepository {
   listRecoveryPoints(): Promise<RecoveryPoint[]>;
 }
 
+export function normalizeAppData(data: AppData): AppData {
+  data.weights ??= [];
+  data.settings ??= { displayName: "Adventurer", theme: "system" };
+  return data;
+}
+
 export const emptyData = (): AppData => ({
   schemaVersion: 1,
   exercises: [],
@@ -28,7 +34,7 @@ export class MemoryRepository implements DataRepository {
   private recoverySequence = 0;
   constructor(private data: AppData = emptyData()) {}
   async load(): Promise<AppData> {
-    return structuredClone(this.data);
+    return normalizeAppData(structuredClone(this.data));
   }
   async save(data: AppData): Promise<void> {
     if (JSON.stringify(this.data) !== JSON.stringify(data)) {
@@ -46,6 +52,9 @@ export class MemoryRepository implements DataRepository {
     await this.save(data);
   }
   async listRecoveryPoints(): Promise<RecoveryPoint[]> {
-    return structuredClone(this.recoveryPoints);
+    return structuredClone(this.recoveryPoints).map((point) => ({
+      ...point,
+      data: normalizeAppData(point.data)
+    }));
   }
 }

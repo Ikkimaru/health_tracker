@@ -1,4 +1,9 @@
-import { emptyData, type DataRepository, type RecoveryPoint } from "../application/store";
+import {
+  emptyData,
+  normalizeAppData,
+  type DataRepository,
+  type RecoveryPoint
+} from "../application/store";
 import type { AppData } from "../domain/types";
 
 const DATABASE = "health-quest";
@@ -28,9 +33,9 @@ export class IndexedDbRepository implements DataRepository {
     const database = await this.open();
     try {
       const transaction = database.transaction(STORE, "readonly");
-      return (
+      return normalizeAppData(
         ((await requestResult(transaction.objectStore(STORE).get(KEY))) as AppData | undefined) ??
-        emptyData()
+          emptyData()
       );
     } finally {
       database.close();
@@ -85,9 +90,11 @@ export class IndexedDbRepository implements DataRepository {
       const points = (await requestResult(
         transaction.objectStore(RECOVERY_STORE).getAll()
       )) as RecoveryPoint[];
-      return points.sort(
-        (a, b) => (b.sequence ?? 0) - (a.sequence ?? 0) || b.createdAt.localeCompare(a.createdAt)
-      );
+      return points
+        .map((point) => ({ ...point, data: normalizeAppData(point.data) }))
+        .sort(
+          (a, b) => (b.sequence ?? 0) - (a.sequence ?? 0) || b.createdAt.localeCompare(a.createdAt)
+        );
     } finally {
       database.close();
     }
