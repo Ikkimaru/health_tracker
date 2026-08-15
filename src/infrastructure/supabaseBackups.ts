@@ -3,7 +3,7 @@ import type { AppData } from "../domain/types";
 
 // cspell:ignore supabase
 
-const TABLE = "app_backups";
+const SNAPSHOTS_TABLE = "app_snapshots";
 
 export interface SupabaseBackupSummary {
   id: string;
@@ -80,7 +80,7 @@ export class SupabaseBackups {
   async list(): Promise<SupabaseBackupSummary[]> {
     this.requireUser();
     const { data, error } = await this.requireClient()
-      .from(TABLE)
+      .from(SNAPSHOTS_TABLE)
       .select("id, created_at")
       .order("created_at", { ascending: false });
     if (error) throw error;
@@ -91,24 +91,21 @@ export class SupabaseBackups {
   }
 
   async upload(data: AppData, retain = 5): Promise<void> {
-    const userId = this.requireUser();
+    this.requireUser();
     const client = this.requireClient();
-    const { error } = await client.from(TABLE).insert({ user_id: userId, data });
+    const { error } = await client.rpc("store_app_snapshot", { document: data });
     if (error) throw error;
     const backups = await this.list();
     const expired = backups.slice(retain).map(({ id }) => id);
     if (!expired.length) return;
-    const { error: deleteError } = await client.from(TABLE).delete().in("id", expired);
+    const { error: deleteError } = await client.from(SNAPSHOTS_TABLE).delete().in("id", expired);
     if (deleteError) throw deleteError;
   }
 
   async downloadLatest(): Promise<{ summary: SupabaseBackupSummary; data: unknown }> {
     this.requireUser();
     const { data, error } = await this.requireClient()
-      .from(TABLE)
-      .select("id, created_at, data")
-      .order("created_at", { ascending: false })
-      .limit(1)
+      .rpc("download_latest_app_snapshot")
       .maybeSingle<BackupRow>();
     if (error) throw error;
     if (!data) throw new Error("No Supabase backup was found.");

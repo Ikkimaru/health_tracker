@@ -10,9 +10,9 @@ The password is never saved and cannot be recovered. Import authenticates, decry
 
 ## Optional Supabase backup
 
-When configured and explicitly used, the app stores application data in Supabase. Supabase can
-process readable health records plus account email, identifiers, timestamps, sizes, authentication,
-and network metadata. Row Level Security restricts each signed-in user to their own records. The
+When configured and explicitly used, the app stores application data in normalized Supabase
+snapshot tables. Supabase can process readable health records plus account email, identifiers,
+timestamps, sizes, authentication, and network metadata. Row Level Security restricts each signed-in user to their own records. The
 public browser key is not a secret and grants no bypass of those policies; a service-role key must
 never be included in the app. Supabase Auth persists its session in browser storage.
 

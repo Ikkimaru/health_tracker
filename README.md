@@ -67,6 +67,7 @@ All Git staging, commits, and pushes are intentionally human-controlled. Project
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Database schema](docs/DATABASE_SCHEMA.md)
 - [Domain rules](docs/DOMAIN_RULES.md)
 - [Privacy and backup](docs/PRIVACY.md)
 - [Testing](docs/TESTING.md)

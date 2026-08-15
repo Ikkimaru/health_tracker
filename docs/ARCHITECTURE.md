@@ -19,12 +19,13 @@ Domain code does not depend on the DOM, IndexedDB, Vite, or the transfer server.
 
 Routines reference exercise definitions. The first time a scheduled date is opened, the app snapshots applicable routines and prescriptions into a daily session. Completion changes only that session. Progress is derived from the complete session history.
 
-IndexedDB holds one versioned application document. Imports decrypt and validate a full replacement before asking for confirmation and writing it, preventing partially restored state.
+IndexedDB holds one versioned application document. Imports decrypt and validate a full replacement before asking for confirmation and writing it, preventing partially restored state. The complete browser and Supabase layouts are recorded in [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
 
-The optional Supabase adapter uploads the application document into a Postgres row owned by the
-authenticated user. IndexedDB remains authoritative and offline-capable. Supabase Auth persists its
-browser session, and signed-in changes can schedule further snapshots. Restore remains an explicit
-full replacement rather than unsafe last-write-wins synchronization.
+The optional Supabase adapter atomically expands the application document into feature-specific
+Postgres tables owned by the authenticated user. Snapshot metadata ties those rows into restorable
+versions and preserves the newest five. IndexedDB remains authoritative and offline-capable.
+Supabase Auth persists its browser session, and signed-in changes can schedule further snapshots.
+Restore remains an explicit full replacement rather than unsafe last-write-wins synchronization.
 
 ## PWA lifecycle
 

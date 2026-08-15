@@ -11,16 +11,30 @@ const appData = emptyData();
 describe("Supabase backups", () => {
   it("ships row isolation, snapshot size, and server-side retention safeguards", () => {
     const migration = readFileSync(
-      new URL(
-        "../supabase/migrations/20260815223000_store_readable_app_backups.sql",
-        import.meta.url
-      ),
+      new URL("../supabase/migrations/20260816090000_normalize_app_snapshots.sql", import.meta.url),
       "utf8"
     );
     expect(migration).toContain("enable row level security");
     expect(migration).toContain("auth.uid()) = user_id");
-    expect(migration).toContain("octet_length(data::text) <= 5242880");
+    expect(migration).toContain("revoke all on table public.%I from anon, authenticated");
+    expect(migration).toContain("grant select, delete on table public.app_snapshots");
+    expect(migration).toContain("octet_length(document::text) > 5242880");
     expect(migration).toContain("offset 5");
+    expect(migration).toContain("from public.app_backups");
+    expect(migration).toContain("drop table public.app_backups");
+    expect(migration).toContain("drop table public.encrypted_backups");
+    for (const table of [
+      "app_snapshots",
+      "app_settings",
+      "exercises",
+      "routines",
+      "routine_items",
+      "daily_sessions",
+      "session_exercises",
+      "session_prescriptions"
+    ]) {
+      expect(migration).toContain(`create table public.${table}`);
+    }
   });
 
   it("does not allow cloud access without configuration", async () => {
@@ -31,11 +45,10 @@ describe("Supabase backups", () => {
   });
 
   it("stores snapshots for the authenticated user and removes old versions", async () => {
-    const insert = vi.fn().mockResolvedValue({ error: null });
+    const rpc = vi.fn().mockResolvedValue({ error: null });
     const remove = vi.fn().mockResolvedValue({ error: null });
     const from = vi
       .fn()
-      .mockReturnValueOnce({ insert })
       .mockReturnValueOnce({
         select: () => ({
           order: () =>
@@ -56,14 +69,40 @@ describe("Supabase backups", () => {
           error: null
         })
       },
-      from
+      from,
+      rpc
     } as unknown as SupabaseClient;
     const backups = new SupabaseBackups("", "", client);
 
     await backups.initialize();
     await backups.upload(appData);
 
-    expect(insert).toHaveBeenCalledWith({ user_id: "user-1", data: appData });
+    expect(rpc).toHaveBeenCalledWith("store_app_snapshot", { document: appData });
     expect(remove).toHaveBeenCalledWith("id", ["backup-5"]);
+  });
+
+  it("reassembles the latest normalized snapshot for restore", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: "snapshot-1", created_at: "2026-08-15T12:00:00.000Z", data: appData },
+      error: null
+    });
+    const rpc = vi.fn().mockReturnValue({ maybeSingle });
+    const client = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { user: { id: "user-1", email: "person@example.com" } } },
+          error: null
+        })
+      },
+      rpc
+    } as unknown as SupabaseClient;
+    const backups = new SupabaseBackups("", "", client);
+
+    await backups.initialize();
+    await expect(backups.downloadLatest()).resolves.toEqual({
+      summary: { id: "snapshot-1", createdAt: "2026-08-15T12:00:00.000Z" },
+      data: appData
+    });
+    expect(rpc).toHaveBeenCalledWith("download_latest_app_snapshot");
   });
 });

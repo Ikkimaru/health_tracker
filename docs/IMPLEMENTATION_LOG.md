@@ -23,6 +23,20 @@ Verification completed on the implementation environment:
 
 Physical Android installation, offline relaunch, firewall behavior, and cross-device QR transfer still require the owner's phone and network for manual acceptance testing.
 
+## 2026-08-16 — Normalized Supabase snapshots
+
+- Replaced the catch-all `app_backups` JSON rows with snapshot metadata and feature-specific tables
+  for settings, exercises, routines, schedules, daily sessions, and set completion.
+- Added atomic database functions that split uploads across those tables and reconstruct complete
+  application documents for restore.
+- Migrated every existing `app_backups` snapshot before removing the old table, preserving its
+  creation time and retention history.
+- Removed the superseded `encrypted_backups` table and its unused retention function.
+- Kept achievements, XP, levels, and streaks derived from session history to avoid mutable progress
+  drift.
+- Added an authoritative database-schema reference covering tables, relationships, ownership, and
+  the browser IndexedDB layout.
+
 ## 2026-08-15 — Formatting policy
 
 - Added pinned Prettier tooling and repository configuration to keep TypeScript, CSS, HTML, JSON, YAML, and Markdown readable and consistent.
