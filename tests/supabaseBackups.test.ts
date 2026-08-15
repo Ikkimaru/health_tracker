@@ -56,6 +56,19 @@ describe("Supabase backups", () => {
     expect(migration).toContain("from auth.users");
   });
 
+  it("qualifies role columns that overlap the directory return names", () => {
+    const migration = readFileSync(
+      new URL(
+        "../supabase/migrations/20260816110000_fix_registered_user_directory.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    expect(migration).toContain("current_user_role.user_id");
+    expect(migration).toContain("current_user_role.role");
+    expect(migration).not.toMatch(/where user_id|and role =/);
+  });
+
   it("stores snapshots for the authenticated user and removes old versions", async () => {
     const rpc = vi.fn().mockResolvedValue({ error: null });
     const remove = vi.fn().mockResolvedValue({ error: null });

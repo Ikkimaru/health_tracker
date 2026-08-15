@@ -283,7 +283,7 @@ export class HealthQuestApp {
         ? `<div class="user-list">${users
             .map(
               (user) =>
-                `<article><div><strong>${escapeHtml(user.email || "No email")}</strong><small>Joined ${escapeHtml(new Date(user.registeredAt).toLocaleDateString())}</small></div><span class="role-badge">${user.role === "developer" ? "Developer" : "User"}</span></article>`
+                `<article><div><strong>${escapeHtml(user.email || "No email")}</strong><small>Joined ${escapeHtml(user.registeredAt.slice(0, 10))}</small></div><span class="role-badge">${user.role === "developer" ? "Developer" : "User"}</span></article>`
             )
             .join("")}</div>`
         : '<p class="empty">No registered users.</p>';

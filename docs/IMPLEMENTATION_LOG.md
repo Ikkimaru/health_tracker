@@ -1,5 +1,13 @@
 # Implementation log
 
+## 2026-08-15 — Registration date format
+
+- Standardized developer-directory registration dates as `yyyy-mm-dd`.
+
+## 2026-08-15 — Registered-user RPC fix
+
+- Qualified role-table columns in the developer directory function to prevent PostgreSQL output-column ambiguity.
+
 ## 2026-08-15 — Precise sync cooldown
 
 - Changed refresh cooldown feedback from rounded minutes to the exact remaining seconds.
