@@ -56,6 +56,31 @@ describe("Supabase backups", () => {
     expect(migration).toContain("enable row level security");
   });
 
+  it("retains only the current and immediately previous cloud snapshots", () => {
+    const migration = readFileSync(
+      new URL(
+        "../supabase/migrations/20260817100000_retain_two_app_snapshots.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    expect(migration).toContain("offset 2");
+  });
+
+  it("ships a transactional server-side patch merger", () => {
+    const migration = readFileSync(
+      new URL(
+        "../supabase/migrations/20260817120000_add_incremental_snapshot_patches.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    expect(migration).toContain("create function public.store_app_patch");
+    expect(migration).toContain("public.read_app_snapshot(current_snapshot)");
+    expect(migration).toContain("public.store_app_snapshot(document)");
+    expect(migration).toContain("grant execute on function public.store_app_patch");
+  });
+
   it("restricts the registered-user directory to developers", () => {
     const migration = readFileSync(
       new URL("../supabase/migrations/20260816100000_add_app_user_roles.sql", import.meta.url),
@@ -115,7 +140,7 @@ describe("Supabase backups", () => {
     await backups.upload(appData);
 
     expect(rpc).toHaveBeenCalledWith("store_app_snapshot", { document: appData });
-    expect(remove).toHaveBeenCalledWith("id", ["backup-5"]);
+    expect(remove).toHaveBeenCalledWith("id", ["backup-2", "backup-3", "backup-4", "backup-5"]);
   });
 
   it("reassembles the latest normalized snapshot for restore", async () => {
@@ -141,6 +166,48 @@ describe("Supabase backups", () => {
       data: appData
     });
     expect(rpc).toHaveBeenCalledWith("download_latest_app_snapshot");
+  });
+
+  it("uploads only changed entities after the initial snapshot", async () => {
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn().mockReturnValue({
+      select: () => ({
+        order: () =>
+          Promise.resolve({
+            data: [
+              { id: "snapshot-2", created_at: "2026-08-16T12:00:00.000Z" },
+              { id: "snapshot-1", created_at: "2026-08-15T12:00:00.000Z" }
+            ],
+            error: null
+          })
+      })
+    });
+    const client = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { user: { id: "user-1", email: "person@example.com" } } },
+          error: null
+        })
+      },
+      rpc,
+      from
+    } as unknown as SupabaseClient;
+    const backups = new SupabaseBackups("", "", client);
+    await backups.initialize();
+    const changed = structuredClone(appData);
+    changed.weights.push({ date: "2026-08-16", weightKg: 80 });
+
+    await backups.uploadChanges(appData, changed);
+
+    expect(rpc).toHaveBeenCalledWith("store_app_patch", {
+      changes: {
+        schemaVersion: 1,
+        weights: {
+          upserts: [{ position: 0, value: { date: "2026-08-16", weightKg: 80 } }],
+          deletes: []
+        }
+      }
+    });
   });
 
   it("loads registered users for a developer", async () => {

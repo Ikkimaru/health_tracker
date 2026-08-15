@@ -21,9 +21,13 @@ Routines reference exercise definitions. The first time a scheduled date is open
 
 IndexedDB holds one versioned application document. Imports decrypt and validate a full replacement before asking for confirmation and writing it, preventing partially restored state. The complete browser and Supabase layouts are recorded in [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
 
-The optional Supabase adapter atomically expands the application document into feature-specific
-Postgres tables owned by the authenticated user. Snapshot metadata ties those rows into restorable
-versions and preserves the newest five. IndexedDB remains authoritative and offline-capable.
+The optional Supabase adapter sends a full document for the initial snapshot, then sends entity-level
+patches containing only changed settings, exercises, routines, sessions, or weight dates. A
+transactional database function serializes each user's patches, merges them into the current
+document, and expands the result into feature-specific Postgres tables. Snapshot metadata ties those
+rows into restorable versions and preserves the current and immediately previous successful cloud snapshots. IndexedDB
+remains authoritative and offline-capable, with five rotating pre-save recovery points stored in a
+separate local object store.
 Supabase Auth persists its browser session, and signed-in changes can schedule further snapshots.
 Restore remains an explicit full replacement rather than unsafe last-write-wins synchronization.
 

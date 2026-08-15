@@ -1,4 +1,4 @@
-import type { DataRepository } from "../application/store";
+import type { DataRepository, RecoveryPoint } from "../application/store";
 import {
   decideSync,
   fingerprint,
@@ -62,6 +62,8 @@ export class HealthQuestApp {
   );
   private cloudBackupTimer?: number;
   private snackbarTimer?: number;
+  private recoveryPoints: RecoveryPoint[] = [];
+  private cloudBaseline?: AppData;
 
   constructor(
     private readonly root: HTMLElement,
@@ -75,6 +77,7 @@ export class HealthQuestApp {
       this.message = "The saved Supabase session could not be restored.";
     }
     this.data = await this.repository.load();
+    this.recoveryPoints = await this.repository.listRecoveryPoints();
     this.data.weights ??= [];
     this.data.settings.customTheme ??= defaultCustomTheme();
     this.data.settings.weightTrendMethod ??= "linear";
@@ -107,14 +110,28 @@ export class HealthQuestApp {
     }
   }
 
-  private async recordBackup(summary: { id: string; createdAt: string }): Promise<void> {
+  private async recordBackup(
+    summary: { id: string; createdAt: string },
+    data: AppData = this.data
+  ): Promise<void> {
     const metadata = this.syncMetadata();
     this.saveSyncMetadata({
       ...metadata,
       snapshotId: summary.id,
-      localHash: await fingerprint(this.data),
+      localHash: await fingerprint(data),
       lastBackupAt: summary.createdAt
     });
+  }
+
+  private async uploadCloudData(
+    data: AppData
+  ): Promise<{ id: string; createdAt: string } | undefined> {
+    const uploaded = structuredClone(data);
+    const summary = this.cloudBaseline
+      ? await this.cloud.uploadChanges(this.cloudBaseline, uploaded)
+      : await this.cloud.upload(uploaded);
+    this.cloudBaseline = uploaded;
+    return summary;
   }
 
   private async syncOnRefresh(): Promise<void> {
@@ -133,6 +150,7 @@ export class HealthQuestApp {
       const latest = await this.cloud.queryLatest();
       if (!latest) {
         const summary = await this.cloud.upload(this.data);
+        this.cloudBaseline = structuredClone(this.data);
         await this.recordBackup(summary);
         this.message = "Local data backed up to Supabase on refresh.";
         return;
@@ -147,6 +165,7 @@ export class HealthQuestApp {
         lastBackupAt: latest.summary.createdAt
       });
       if (decision === "none") {
+        this.cloudBaseline = structuredClone(cloudData);
         this.saveSyncMetadata({
           ...this.syncMetadata(),
           snapshotId: latest.summary.id,
@@ -169,7 +188,9 @@ export class HealthQuestApp {
       }
       if (useCloud) {
         await this.repository.replace(cloudData);
+        this.recoveryPoints = await this.repository.listRecoveryPoints();
         this.data = cloudData;
+        this.cloudBaseline = structuredClone(cloudData);
         this.saveSyncMetadata({
           ...this.syncMetadata(),
           snapshotId: latest.summary.id,
@@ -178,8 +199,9 @@ export class HealthQuestApp {
         });
         this.message = "Latest Supabase data restored on refresh.";
       } else {
-        const summary = await this.cloud.upload(this.data);
-        await this.recordBackup(summary);
+        this.cloudBaseline = structuredClone(cloudData);
+        const summary = await this.uploadCloudData(this.data);
+        if (summary) await this.recordBackup(summary, this.cloudBaseline!);
         this.message =
           decision === "conflict"
             ? "Local data kept and backed up to Supabase."
@@ -244,6 +266,7 @@ export class HealthQuestApp {
         this.weightCalendarMonth
       )
     );
+    this.addLocalRecoveryPanel();
     this.addSupabasePanel();
     this.bindEvents();
     this.root.querySelector<HTMLDialogElement>(".weight-editor")?.showModal();
@@ -280,7 +303,7 @@ export class HealthQuestApp {
       : "<small>Supabase requires deployment URL and publishable-key configuration. See the README.</small>";
     transfer?.insertAdjacentHTML(
       "beforebegin",
-      `<div class="panel"><h3>Supabase backup</h3><p>${accountStatus} The newest five snapshots are retained.</p>${syncStatus}${controls}${configurationNote}</div>`
+      `<div class="panel"><h3>Supabase backup</h3><p>${accountStatus} The current and immediately previous successful snapshots are retained.</p>${syncStatus}${controls}${configurationNote}</div>`
     );
     if (this.cloud.role === "developer") {
       transfer?.insertAdjacentHTML(
@@ -289,6 +312,25 @@ export class HealthQuestApp {
       );
       void this.loadRegisteredUsers();
     }
+  }
+
+  private addLocalRecoveryPanel(): void {
+    if (this.view !== "settings") return;
+    const transfer = [...this.root.querySelectorAll<HTMLElement>(".panel")].find((panel) =>
+      panel.querySelector("h3")?.textContent?.includes("Local transfer")
+    );
+    const items = this.recoveryPoints.length
+      ? `<div class="recovery-list">${this.recoveryPoints
+          .map(
+            (point, index) =>
+              `<article><div><strong>Recovery ${index + 1}</strong><small>${escapeHtml(new Date(point.createdAt).toLocaleString())} · ${point.data.weights.length} weights · ${point.data.sessions.length} sessions</small></div><div class="actions"><button class="quiet" data-restore-recovery="${point.id}">Restore locally</button><button class="button" data-upload-recovery="${point.id}" ${this.cloud.signedIn ? "" : "disabled"}>Back up online</button></div></article>`
+          )
+          .join("")}</div>`
+      : `<p class="empty">Recovery points appear here after saved changes.</p>`;
+    transfer?.insertAdjacentHTML(
+      "beforebegin",
+      `<div class="panel"><p class="eyebrow">LOCAL RECOVERY</p><h3>Recent versions</h3><p>The five newest pre-save versions stay on this device. Restoring one does not upload it automatically.</p>${items}</div>`
+    );
   }
 
   private async loadRegisteredUsers(): Promise<void> {
@@ -365,6 +407,22 @@ export class HealthQuestApp {
         toggle();
       });
     });
+    this.root
+      .querySelectorAll<HTMLButtonElement>("[data-restore-recovery]")
+      .forEach((button) =>
+        button.addEventListener(
+          "click",
+          () => void this.restoreRecoveryPoint(button.dataset.restoreRecovery!)
+        )
+      );
+    this.root
+      .querySelectorAll<HTMLButtonElement>("[data-upload-recovery]")
+      .forEach((button) =>
+        button.addEventListener(
+          "click",
+          () => void this.uploadRecoveryPoint(button.dataset.uploadRecovery!)
+        )
+      );
     this.root.querySelectorAll<HTMLButtonElement>("[data-weight-date]").forEach((button) =>
       button.addEventListener("click", () => {
         this.selectedWeightDate = button.dataset.weightDate!;
@@ -662,16 +720,67 @@ export class HealthQuestApp {
 
   private async persist(): Promise<void> {
     await this.repository.save(this.data);
+    this.recoveryPoints = await this.repository.listRecoveryPoints();
     if (!this.cloud.signedIn) return;
     window.clearTimeout(this.cloudBackupTimer);
     this.cloudBackupTimer = window.setTimeout(() => void this.automaticSupabaseBackup(), 1_500);
   }
 
+  private async restoreRecoveryPoint(pointId: string): Promise<void> {
+    const point = this.recoveryPoints.find(({ id }) => id === pointId);
+    if (
+      !point ||
+      !confirm(
+        `Restore the local version from ${new Date(point.createdAt).toLocaleString()}? Your current version will become a recovery point.`
+      )
+    )
+      return;
+    this.data = structuredClone(point.data);
+    await this.repository.replace(this.data);
+    this.recoveryPoints = await this.repository.listRecoveryPoints();
+    this.applyTheme();
+    this.message = "Local recovery point restored. It has not been uploaded to Supabase.";
+    this.render();
+  }
+
+  private async uploadRecoveryPoint(pointId: string): Promise<void> {
+    const point = this.recoveryPoints.find(({ id }) => id === pointId);
+    if (!point) return;
+    if (!this.cloud.signedIn) {
+      this.message = "Sign in to Supabase before uploading a recovery point.";
+      this.render();
+      return;
+    }
+    if (
+      !confirm(
+        "This recovery point is older than the current local version. Uploading it will make the older version the current Supabase backup. Continue?"
+      )
+    )
+      return;
+    try {
+      const summary = await this.uploadCloudData(point.data);
+      if (!summary) return;
+      this.saveSyncMetadata({
+        ...this.syncMetadata(),
+        snapshotId: summary.id,
+        localHash: await fingerprint(point.data),
+        lastBackupAt: summary.createdAt
+      });
+      this.message =
+        "Older recovery point backed up online. The current local version was not changed.";
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : "Recovery-point backup failed.";
+    }
+    this.render();
+  }
+
   private async automaticSupabaseBackup(): Promise<void> {
     try {
-      const summary = await this.cloud.upload(this.data);
-      await this.recordBackup(summary);
-      this.message = "Changes saved locally and backed up to Supabase.";
+      const summary = await this.uploadCloudData(this.data);
+      if (summary) await this.recordBackup(summary, this.cloudBaseline!);
+      this.message = summary
+        ? "Changes saved locally and backed up to Supabase."
+        : "Changes saved locally; Supabase was already current.";
     } catch (error) {
       this.message =
         error instanceof Error ? error.message : "The automatic Supabase backup failed.";
@@ -708,6 +817,7 @@ export class HealthQuestApp {
       const summary = `${restored.exercises.length} exercises, ${restored.routines.length} routines, ${restored.sessions.length} sessions`;
       if (!confirm(`Replace this device's data with ${summary}? This cannot be undone.`)) return;
       await this.repository.replace(restored);
+      this.recoveryPoints = await this.repository.listRecoveryPoints();
       this.data = restored;
       this.applyTheme();
       this.message = `Backup restored: ${summary}.`;
@@ -743,6 +853,7 @@ export class HealthQuestApp {
   private async signOutSupabase(): Promise<void> {
     try {
       await this.cloud.signOut();
+      this.cloudBaseline = undefined;
       this.message = "Signed out of Supabase.";
     } catch (error) {
       this.message = error instanceof Error ? error.message : "Supabase sign-out failed.";
@@ -752,10 +863,11 @@ export class HealthQuestApp {
 
   private async backupToSupabase(): Promise<void> {
     try {
-      const summary = await this.cloud.upload(this.data);
-      await this.recordBackup(summary);
-      this.message =
-        "Backup saved to Supabase. Later changes will back up automatically while this app remains open.";
+      const summary = await this.uploadCloudData(this.data);
+      if (summary) await this.recordBackup(summary, this.cloudBaseline!);
+      this.message = summary
+        ? "Backup saved to Supabase. Later changes will back up automatically while this app remains open."
+        : "Supabase already has the current version.";
     } catch (error) {
       this.message = error instanceof Error ? error.message : "Supabase backup failed.";
     }
@@ -786,7 +898,9 @@ export class HealthQuestApp {
       )
         return;
       await this.repository.replace(restored);
+      this.recoveryPoints = await this.repository.listRecoveryPoints();
       this.data = restored;
+      this.cloudBaseline = structuredClone(restored);
       this.applyTheme();
       this.saveSyncMetadata({
         ...this.syncMetadata(),

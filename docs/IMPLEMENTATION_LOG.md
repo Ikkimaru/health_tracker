@@ -12,6 +12,12 @@
 - Added explicit previous/next month calendar navigation and confirmed deletion for existing weight records.
 - Hid the Today weight-entry card after that day's reading has been captured; later edits remain in the calendar.
 
+## Recovery retention
+
+- Added five visible, rotating IndexedDB pre-save recovery points with local restore and explicit older-version cloud upload controls.
+- Reduced Supabase retention to the current and immediately previous successful snapshot.
+- Replaced routine full-document network uploads with entity-level patches merged transactionally into complete restorable cloud snapshots.
+
 ## 2026-08-15 — Registration date format
 
 - Standardized developer-directory registration dates as `yyyy-mm-dd`.

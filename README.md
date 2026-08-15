@@ -31,10 +31,11 @@ to work.
 4. Add those two values as GitHub repository variables with the same names. The Pages workflow
    passes them to the production build. Restart the local server or redeploy the app.
 
-In Settings, create an account or sign in, then choose **Back up now**. The newest five snapshots are
-retained, and later edits are backed up automatically while the tab remains open. Supabase persists
+In Settings, create an account or sign in, then choose **Back up now**. The current and immediately
+previous successful snapshots are retained, and later edits are backed up automatically while the tab remains open. Supabase persists
 the authentication session locally. Cloud records are protected by authentication and Row Level
 Security but are not encrypted with a separate application password.
+After the initial snapshot, backups transmit only changed entities or individual weight dates.
 
 ### Assign a developer
 

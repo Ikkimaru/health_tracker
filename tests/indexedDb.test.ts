@@ -27,4 +27,24 @@ describe("local IndexedDB repository", () => {
     await repository.replace(replacement);
     expect(await repository.load()).toEqual(replacement);
   });
+
+  it("keeps the five newest distinct pre-save recovery points", async () => {
+    const repository = new IndexedDbRepository();
+    const data = emptyData();
+    data.settings.displayName = "Version 0";
+    await repository.save(data);
+    for (let version = 1; version <= 7; version += 1) {
+      data.settings.displayName = `Version ${version}`;
+      await repository.save(data);
+    }
+
+    const points = await repository.listRecoveryPoints();
+    expect(points).toHaveLength(5);
+    expect(points[0]?.data.settings.displayName).toBe("Version 6");
+    expect(points[4]?.data.settings.displayName).toBe("Version 2");
+
+    await repository.replace(points[0]!.data);
+    expect((await repository.load()).settings.displayName).toBe("Version 6");
+    expect((await repository.listRecoveryPoints())[0]?.data.settings.displayName).toBe("Version 7");
+  });
 });

@@ -21,7 +21,7 @@ of every registered account. This directory is returned by a server-authorized d
 ordinary users cannot query it. Developers do not receive access to another user's health snapshots.
 
 Database constraints reject documents larger than 5 MB, and a database trigger retains
-only the newest five snapshots per account. These limits are enforced even when a caller bypasses
+only the current and immediately previous successful snapshots per account. These limits are enforced even when a caller bypasses
 the application interface and sends requests directly to the Data API.
 
 Cloud restore validates and decrypts the newest snapshot before asking to replace local data. The
@@ -32,6 +32,10 @@ Refresh reconciliation compares a SHA-256 fingerprint of the local application d
 latest Supabase snapshot. Per-account synchronization IDs, fingerprints, and timestamps are stored
 in browser local storage; the fingerprint is not a copy of the underlying health records. Conflicts
 require the user to choose which complete version replaces the other.
+
+The first cloud backup transfers the complete application document. Later backups send only changed
+entities and dated weight upserts or deletions. Supabase merges the patch transactionally; transport
+payloads therefore do not repeatedly include unchanged health history.
 
 ## QR LAN transfer
 

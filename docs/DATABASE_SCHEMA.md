@@ -7,10 +7,14 @@ table, object store, column, relationship, or migration change.
 
 ## Supabase
 
-Supabase stores up to five restorable application snapshots per account. A snapshot is one atomic
+Supabase stores the current and immediately previous successful application snapshots per account. A snapshot is one atomic
 version of the user's data, but its feature records are normalized instead of being embedded in a
 single JSON document. `store_app_snapshot` writes a complete snapshot, and
 `download_latest_app_snapshot` reconstructs the application document expected by the browser.
+After the initial snapshot, `store_app_patch` accepts only changed entities or weight dates. It locks
+patch application per user, merges those changes with the current document inside the database, and
+calls the same normalized snapshot writer atomically. This minimizes network transfer while keeping
+complete current and previous versions available for restore.
 
 All user-owned tables use Row Level Security. Authenticated browser clients can directly list and
 delete only their own snapshot metadata; feature-table access is confined to narrowly granted
@@ -75,9 +79,10 @@ migrated because the application superseded that encrypted cloud format before i
 
 IndexedDB remains the authoritative offline store.
 
-| Database                   | Object store | Key       | Value                                        |
-| -------------------------- | ------------ | --------- | -------------------------------------------- |
-| `health-quest` (version 1) | `app-data`   | `current` | Complete schema-version-1 `AppData` document |
+| Database                   | Object store      | Key         | Value                                                |
+| -------------------------- | ----------------- | ----------- | ---------------------------------------------------- |
+| `health-quest` (version 2) | `app-data`        | `current`   | Complete schema-version-1 `AppData` document         |
+| `health-quest` (version 2) | `recovery-points` | Recovery ID | Timestamped pre-save `AppData`; newest five retained |
 
 Browser `localStorage` keeps per-account synchronization metadata: the last common snapshot ID and
 local fingerprint, plus latest backup, query, and restore timestamps. It contains no health records.
@@ -85,3 +90,8 @@ local fingerprint, plus latest backup, query, and restore timestamps. It contain
 The browser store intentionally remains a single document because local saves and full replacement
 imports are atomic at this boundary. The feature tables above apply to the relational Supabase
 backup boundary.
+
+IndexedDB version 2 also contains a `recovery-points` object store keyed by recovery ID. Before a
+changed current document is saved, its previous value is recorded there with a timestamp. Duplicate
+states are skipped and only the newest five are retained. Recovery points never leave the device
+unless the user explicitly selects one for Supabase upload.

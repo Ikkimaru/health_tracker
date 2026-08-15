@@ -115,3 +115,21 @@ test("adds and edits weight from the calendar and changes the week start", async
   await page.getByRole("button", { name: "3 months" }).click();
   await expect(page.getByRole("button", { name: "Monthly" })).toBeEnabled();
 });
+
+test("shows and restores local recovery points", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Today's weight (kg)").fill("80");
+  await page.getByRole("button", { name: "Store weight" }).click();
+  await page.getByRole("button", { name: "Weight", exact: true }).click();
+  await page.locator("[data-weight-date].has-weight").click();
+  await page.getByLabel("Weight (kg)").fill("81");
+  await page.getByRole("button", { name: "Save weight" }).click();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByText("Recovery 1")).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Restore locally" }).first().click();
+
+  await page.getByRole("button", { name: "Weight", exact: true }).click();
+  await expect(page.locator("[data-weight-date].has-weight")).toContainText("80 kg");
+});

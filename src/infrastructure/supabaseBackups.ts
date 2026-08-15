@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createAppPatch, patchHasChanges } from "../application/cloudPatch";
 import type { AppData } from "../domain/types";
 
 // cspell:ignore supabase
@@ -142,15 +143,35 @@ export class SupabaseBackups {
     }));
   }
 
-  async upload(data: AppData, retain = 5): Promise<SupabaseBackupSummary> {
+  async upload(data: AppData, retain = 2): Promise<SupabaseBackupSummary> {
     this.requireUser();
     const client = this.requireClient();
     const { error } = await client.rpc("store_app_snapshot", { document: data });
     if (error) throw error;
+    return this.finishUpload(retain);
+  }
+
+  async uploadChanges(
+    before: AppData,
+    after: AppData,
+    retain = 2
+  ): Promise<SupabaseBackupSummary | undefined> {
+    this.requireUser();
+    const patch = createAppPatch(before, after);
+    if (!patchHasChanges(patch)) return undefined;
+    const { error } = await this.requireClient().rpc("store_app_patch", { changes: patch });
+    if (error) throw error;
+    return this.finishUpload(retain);
+  }
+
+  private async finishUpload(retain: number): Promise<SupabaseBackupSummary> {
     const backups = await this.list();
     const expired = backups.slice(retain).map(({ id }) => id);
     if (expired.length) {
-      const { error: deleteError } = await client.from(SNAPSHOTS_TABLE).delete().in("id", expired);
+      const { error: deleteError } = await this.requireClient()
+        .from(SNAPSHOTS_TABLE)
+        .delete()
+        .in("id", expired);
       if (deleteError) throw deleteError;
     }
     return backups[0]!;
