@@ -36,6 +36,20 @@ retained, and later edits are backed up automatically while the tab remains open
 the authentication session locally. Cloud records are protected by authentication and Row Level
 Security but are not encrypted with a separate application password.
 
+### Assign a developer
+
+Every account is a User unless it has an explicit Developer role. After that person has registered,
+run the following in the Supabase SQL editor, replacing the email address:
+
+```sql
+insert into public.app_user_roles (user_id, role)
+select id, 'developer' from auth.users where email = 'developer@example.com'
+on conflict (user_id) do update set role = excluded.role, updated_at = now();
+```
+
+After signing in again, a Developer section in Settings lists all registered users. Developer access
+does not grant access to their health data.
+
 ## Verify the application
 
 ```powershell

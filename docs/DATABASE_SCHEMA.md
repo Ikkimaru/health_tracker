@@ -16,6 +16,9 @@ All user-owned tables use Row Level Security. Authenticated browser clients can 
 delete only their own snapshot metadata; feature-table access is confined to narrowly granted
 database functions that validate the authenticated owner. Deleting an authentication user deletes
 their snapshots. Deleting a snapshot cascades through every record belonging to that snapshot.
+Application roles are separate from health snapshots. Accounts without an `app_user_roles` row are
+ordinary users. Restricted database functions resolve the current role and expose the authentication
+user directory only to developers.
 
 | Table                    | Purpose                                                  | Important columns                                                                                 |
 | ------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -30,6 +33,7 @@ their snapshots. Deleting a snapshot cascades through every record belonging to 
 | `daily_session_routines` | Ordered routines captured by a daily session             | `snapshot_id`, `session_id`, `position`, `routine_id`                                             |
 | `session_exercises`      | Ordered exercise snapshots within a daily session        | `snapshot_id`, `session_id`, `id`, `source_exercise_id`, completion fields                        |
 | `session_prescriptions`  | Ordered set-level targets and completion                 | `snapshot_id`, `session_id`, `session_exercise_id`, `id`, `target`, `completed`                   |
+| `app_user_roles`         | Optional elevated application role per account           | `user_id`, `role`, `created_at`, `updated_at`                                                     |
 
 ### Relationships
 

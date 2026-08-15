@@ -48,6 +48,7 @@ export class HealthQuestApp {
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? ""
   );
   private cloudBackupTimer?: number;
+  private snackbarTimer?: number;
 
   constructor(
     private readonly root: HTMLElement,
@@ -94,7 +95,7 @@ export class HealthQuestApp {
   private layout(content: string): string {
     const progress = calculateProgress(this.data.sessions);
     const notice = this.message
-      ? `<div class="notice" role="status">${escapeHtml(this.message)}</div>`
+      ? `<div class="snackbar" role="status" aria-live="polite">${escapeHtml(this.message)}</div>`
       : "";
     const navigation = (Object.keys(labels) as View[])
       .map((view) => {
@@ -110,9 +111,18 @@ export class HealthQuestApp {
   }
 
   private render(): void {
+    window.clearTimeout(this.snackbarTimer);
     this.root.innerHTML = this.layout(renderView(this.view, this.data));
     this.addSupabasePanel();
     this.bindEvents();
+    if (this.message) {
+      const renderedMessage = this.message;
+      this.snackbarTimer = window.setTimeout(() => {
+        if (this.message !== renderedMessage) return;
+        this.message = "";
+        this.root.querySelector(".snackbar")?.remove();
+      }, 5_000);
+    }
   }
 
   private addSupabasePanel(): void {
@@ -135,6 +145,34 @@ export class HealthQuestApp {
       "beforebegin",
       `<div class="panel"><h3>Supabase backup</h3><p>${accountStatus} The newest five snapshots are retained.</p>${controls}${configurationNote}</div>`
     );
+    if (this.cloud.role === "developer") {
+      transfer?.insertAdjacentHTML(
+        "beforebegin",
+        '<div class="panel"><p class="eyebrow">DEVELOPER</p><h3>Registered users</h3><div id="registered-users" aria-live="polite">Loading users…</div></div>'
+      );
+      void this.loadRegisteredUsers();
+    }
+  }
+
+  private async loadRegisteredUsers(): Promise<void> {
+    const container = this.root.querySelector<HTMLElement>("#registered-users");
+    if (!container) return;
+    try {
+      const users = await this.cloud.listRegisteredUsers();
+      if (!container.isConnected) return;
+      container.innerHTML = users.length
+        ? `<div class="user-list">${users
+            .map(
+              (user) =>
+                `<article><div><strong>${escapeHtml(user.email || "No email")}</strong><small>Joined ${escapeHtml(new Date(user.registeredAt).toLocaleDateString())}</small></div><span class="role-badge">${user.role === "developer" ? "Developer" : "User"}</span></article>`
+            )
+            .join("")}</div>`
+        : '<p class="empty">No registered users.</p>';
+    } catch (error) {
+      if (!container.isConnected) return;
+      container.textContent =
+        error instanceof Error ? error.message : "Registered users could not be loaded.";
+    }
   }
 
   private bindEvents(): void {

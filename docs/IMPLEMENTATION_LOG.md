@@ -1,5 +1,19 @@
 # Implementation log
 
+## 2026-08-15 — Settings card spacing
+
+- Added consistent vertical spacing between static and dynamically inserted Settings panels.
+
+## 2026-08-15 — User and developer roles
+
+- Added server-authorized User and Developer roles, defaulting every account to User.
+- Added a developer-only Settings view of registered account emails, roles, and registration dates without exposing other users' health data.
+
+## 2026-08-15 — Viewport snackbar feedback
+
+- Replaced page-top action notices with an accessible, viewport-fixed snackbar above the bottom navigation that dismisses after five seconds.
+- Added browser coverage confirming theme and encrypted-backup feedback stays visible while Settings is scrolled.
+
 ## 2026-08-15 — Initial exercise-tracker implementation
 
 - Added a vanilla TypeScript PWA to provide one installable Android and desktop-browser application without a UI framework.

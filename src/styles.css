@@ -177,6 +177,9 @@ main {
   color: var(--muted);
   margin-bottom: 0;
 }
+.panel {
+  margin-bottom: 20px;
+}
 .card.done {
   border-color: var(--success);
 }
@@ -354,17 +357,51 @@ button,
 .achievement.locked {
   opacity: 0.52;
 }
+.user-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.user-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  background: rgba(128, 128, 128, 0.07);
+  border-radius: 10px;
+}
+.user-list strong,
+.user-list small {
+  display: block;
+}
+.user-list small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+.role-badge {
+  padding: 5px 9px;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
 .empty {
   text-align: center;
   color: var(--muted);
 }
-.notice {
-  max-width: 932px;
-  margin: 8px auto 0;
+.snackbar {
+  position: fixed;
+  z-index: 4;
+  right: 24px;
+  bottom: 92px;
+  width: min(420px, calc(100% - 48px));
   padding: 12px 16px;
   background: var(--notice-bg);
   color: var(--notice-text);
   border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
 }
 .nav {
   position: fixed;
@@ -599,6 +636,11 @@ code {
   }
   .nav {
     bottom: 8px;
+  }
+  .snackbar {
+    right: 16px;
+    bottom: 78px;
+    width: calc(100% - 32px);
   }
   .nav button {
     padding: 10px 9px;

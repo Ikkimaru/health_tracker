@@ -10,6 +10,22 @@ export interface SupabaseBackupSummary {
   createdAt: string;
 }
 
+export type AppUserRole = "developer" | "user";
+
+export interface RegisteredAppUser {
+  id: string;
+  email: string;
+  role: AppUserRole;
+  registeredAt: string;
+}
+
+interface RegisteredUserRow {
+  user_id: string;
+  email: string;
+  role: AppUserRole;
+  registered_at: string;
+}
+
 interface BackupRow {
   id: string;
   created_at: string;
@@ -20,6 +36,7 @@ export class SupabaseBackups {
   private readonly client?: SupabaseClient;
   private userId = "";
   private userEmail = "";
+  private userRole: AppUserRole = "user";
 
   constructor(url: string, publishableKey: string, client?: SupabaseClient) {
     this.client = client ?? (url && publishableKey ? createClient(url, publishableKey) : undefined);
@@ -35,6 +52,10 @@ export class SupabaseBackups {
 
   get email(): string {
     return this.userEmail;
+  }
+
+  get role(): AppUserRole {
+    return this.userRole;
   }
 
   private requireClient(): SupabaseClient {
@@ -53,6 +74,7 @@ export class SupabaseBackups {
     if (error) throw error;
     this.userId = data.session?.user.id ?? "";
     this.userEmail = data.session?.user.email ?? "";
+    await this.loadRole();
   }
 
   async signUp(email: string, password: string): Promise<boolean> {
@@ -60,6 +82,7 @@ export class SupabaseBackups {
     if (error) throw error;
     this.userId = data.session?.user.id ?? "";
     this.userEmail = data.session?.user.email ?? "";
+    await this.loadRole();
     return Boolean(data.session);
   }
 
@@ -68,6 +91,7 @@ export class SupabaseBackups {
     if (error) throw error;
     this.userId = data.user.id;
     this.userEmail = data.user.email ?? email;
+    await this.loadRole();
   }
 
   async signOut(): Promise<void> {
@@ -75,6 +99,30 @@ export class SupabaseBackups {
     if (error) throw error;
     this.userId = "";
     this.userEmail = "";
+    this.userRole = "user";
+  }
+
+  private async loadRole(): Promise<void> {
+    if (!this.userId) {
+      this.userRole = "user";
+      return;
+    }
+    const { data, error } = await this.requireClient().rpc("get_my_app_role");
+    if (error) throw error;
+    this.userRole = data === "developer" ? "developer" : "user";
+  }
+
+  async listRegisteredUsers(): Promise<RegisteredAppUser[]> {
+    this.requireUser();
+    if (this.userRole !== "developer") throw new Error("Developer access required.");
+    const { data, error } = await this.requireClient().rpc("list_registered_app_users");
+    if (error) throw error;
+    return ((data ?? []) as RegisteredUserRow[]).map((user) => ({
+      id: user.user_id,
+      email: user.email,
+      role: user.role,
+      registeredAt: user.registered_at
+    }));
   }
 
   async list(): Promise<SupabaseBackupSummary[]> {

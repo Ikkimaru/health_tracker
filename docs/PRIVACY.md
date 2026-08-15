@@ -16,6 +16,10 @@ timestamps, sizes, authentication, and network metadata. Row Level Security rest
 public browser key is not a secret and grants no bypass of those policies; a service-role key must
 never be included in the app. Supabase Auth persists its session in browser storage.
 
+Accounts with the Developer role can view the email address, registration date, and application role
+of every registered account. This directory is returned by a server-authorized database function;
+ordinary users cannot query it. Developers do not receive access to another user's health snapshots.
+
 Database constraints reject documents larger than 5 MB, and a database trigger retains
 only the newest five snapshots per account. These limits are enforced even when a caller bypasses
 the application interface and sends requests directly to the Data API.

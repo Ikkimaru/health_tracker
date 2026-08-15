@@ -34,7 +34,34 @@ test("previews a custom palette and applies it only after saving", async ({ page
   await expect(page.locator("#theme-preview")).toHaveCSS("background-color", "rgb(51, 34, 68)");
   await expect(page.locator("html")).not.toHaveCSS("background-color", "rgb(51, 34, 68)");
   await page.getByRole("button", { name: "Save theme" }).click();
-  await expect(page.locator(".notice")).toContainText("Theme saved");
+  const snackbar = page.locator(".snackbar");
+  await expect(snackbar).toContainText("Theme saved");
+  await expect(snackbar).toBeInViewport();
   await page.reload();
   await expect(page.locator("html")).toHaveCSS("background-color", "rgb(51, 34, 68)");
+});
+
+test("keeps backup confirmation visible in a snackbar", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const backupPanel = page
+    .getByRole("heading", { name: "Encrypted backup", exact: true })
+    .locator("..");
+  const transferPanel = page
+    .getByRole("heading", { name: "Local transfer", exact: true })
+    .locator("..");
+  const backupBox = await backupPanel.boundingBox();
+  const transferBox = await transferPanel.boundingBox();
+  expect(transferBox!.y - (backupBox!.y + backupBox!.height)).toBeGreaterThan(0);
+  await page.getByLabel("Backup password").fill("correct horse battery staple");
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export backup" }).click();
+  await download;
+
+  const snackbar = page.locator(".snackbar");
+  await expect(snackbar).toHaveText("Encrypted backup created.");
+  await expect(snackbar).toBeInViewport();
+  await expect(snackbar).toBeHidden({ timeout: 6_000 });
 });
