@@ -29,6 +29,9 @@
   width: 100%;
   min-height: 220px;
   overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .weight-chart polyline {
@@ -46,6 +49,7 @@
 .weight-chart .chart-point {
   cursor: pointer;
   outline: none;
+  touch-action: manipulation;
 }
 
 .weight-chart .chart-point:focus-visible circle,
