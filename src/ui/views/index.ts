@@ -220,6 +220,9 @@ export function weightView(
         `<button data-dot-interval="${value}" class="${dotInterval === value ? "active" : "quiet"}" ${range === "1" && value === "monthly" ? 'disabled title="Monthly dots require a range longer than one month"' : ""}>${label}</button>`
     )
     .join("")}</div>`;
+  const firstMonth = all[0]?.date.slice(0, 7) ?? todayKey().slice(0, 7);
+  const lastMonth = all.at(-1)?.date.slice(0, 7) ?? todayKey().slice(0, 7);
+  const exportPanel = `<form id="weight-export-form" class="panel form-grid weight-export"><div class="wide"><p class="eyebrow">EXPORT</p><h3>Download weight records</h3><p>Select whole months. Only recorded dates in that inclusive range are exported.</p></div><label>From month<input name="fromMonth" type="month" value="${firstMonth}" max="${todayKey().slice(0, 7)}" required/></label><label>To month<input name="toMonth" type="month" value="${lastMonth}" max="${todayKey().slice(0, 7)}" required/></label><label class="wide">File format<select name="format"><option value="excel">Excel-compatible CSV</option><option value="notepad">Notepad text</option><option value="pdf">PDF document</option></select></label><button class="primary wide">Download weights</button></form>`;
   return `<section><p class="eyebrow">PROGRESS</p><h2>Weight</h2><div class="panel"><div class="range-buttons">${Object.keys(
     weightRanges
   )
@@ -229,7 +232,7 @@ export function weightView(
     )
     .join(
       ""
-    )}</div>${dotControls}${chart}</div><article class="panel trend-analysis"><p class="eyebrow">TREND ANALYSIS</p><h3>${method === "linear" ? "Linear regression" : method === "weighted" ? "Recent-weighted regression" : "Theil–Sen robust trend"}</h3><p>${analysis}</p><small>This is a mathematical projection, not medical advice. Daily weight naturally fluctuates; do not change treatment or nutrition based on this estimate alone.</small></article><section><h2>Calendar</h2><p>Select a date to add or edit its weight.</p><div class="weight-months">${calendar}</div></section>${editor}</section>`;
+    )}</div>${dotControls}${chart}</div><article class="panel trend-analysis"><p class="eyebrow">TREND ANALYSIS</p><h3>${method === "linear" ? "Linear regression" : method === "weighted" ? "Recent-weighted regression" : "Theil–Sen robust trend"}</h3><p>${analysis}</p><small>This is a mathematical projection, not medical advice. Daily weight naturally fluctuates; do not change treatment or nutrition based on this estimate alone.</small></article><section><h2>Calendar</h2><p>Select a date to add or edit its weight.</p><div class="weight-months">${calendar}</div></section>${exportPanel}${editor}</section>`;
 }
 
 function weightSettingsView(data: AppData): string {

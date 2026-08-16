@@ -40,3 +40,5 @@ These are replaceable policies. Change the policy and its focused specifications
 - The selectable methods are ordinary least-squares, 30-day half-life weighted least-squares, and the outlier-resistant Theil–Sen median slope.
 - Weight entries use a dedicated relational table; daily rows remain small, queryable, and easier to validate than month-keyed JSON.
 - The weight calendar starts on Monday by default and can be changed to Sunday in settings.
+- Weight exports filter recorded entries by inclusive start and end months and are generated locally
+  as Excel-compatible CSV, plain text, or PDF files.

@@ -17,6 +17,7 @@ import {
   themeLabels,
   themeVariables
 } from "../application/theme";
+import { createWeightExport, type WeightExportFormat } from "../application/weightExport";
 import { calculateProgress, createSession, exerciseComplete, todayKey } from "../domain/rules";
 import type { AppData, Exercise, MeasurementKind, Routine, ThemeColors } from "../domain/types";
 import { createBackup, openBackup, validateAppData } from "../infrastructure/backup";
@@ -552,6 +553,9 @@ export class HealthQuestApp {
       .querySelector<HTMLFormElement>("#weight-entry-form")
       ?.addEventListener("submit", (event) => void this.saveWeight(event, false));
     this.root
+      .querySelector<HTMLFormElement>("#weight-export-form")
+      ?.addEventListener("submit", (event) => this.downloadWeights(event));
+    this.root
       .querySelector<HTMLFormElement>("#weight-settings-form")
       ?.addEventListener("submit", (event) => void this.saveWeightSettings(event));
     this.root
@@ -686,6 +690,29 @@ export class HealthQuestApp {
     this.selectedWeightDate = "";
     await this.persist();
     this.message = `Weight for ${date} deleted.`;
+    this.render();
+  }
+
+  private downloadWeights(event: SubmitEvent): void {
+    event.preventDefault();
+    try {
+      const values = new FormData(event.currentTarget as HTMLFormElement);
+      const exported = createWeightExport(
+        this.data.weights,
+        textValue(values, "fromMonth"),
+        textValue(values, "toMonth"),
+        textValue(values, "format") as WeightExportFormat
+      );
+      const url = URL.createObjectURL(exported.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = exported.filename;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      this.message = `${exported.filename} downloaded.`;
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : "Weight export failed.";
+    }
     this.render();
   }
 

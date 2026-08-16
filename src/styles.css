@@ -151,6 +151,10 @@
   background: var(--paper);
 }
 
+.weight-export {
+  margin-top: 20px;
+}
+
 .calendar-month-nav {
   display: grid;
   grid-template-columns: auto 1fr auto;
